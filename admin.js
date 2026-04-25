@@ -340,7 +340,10 @@ function updateTeacherUI() {
             nameEl.innerHTML = `<span class="teacher-identity">Tahta oturumu: ${_htmlEncode(t.name || t.username || 'Öğretmen')}</span>`;
         }
         else if (ClassLogAuth.isAdmin()) {
-            nameEl.innerHTML = `<span class="admin-identity">👑 ${_htmlEncode(t.name || 'Sistem Y\u00f6neticisi')}</span>`;
+            const displayName = (t.name && !t.name.includes('Y\u251c') && !t.name.includes('Y\u00c3')) 
+                ? t.name 
+                : 'Sistem Y\u00f6neticisi';
+            nameEl.innerHTML = `<span class="admin-identity">👑 ${_htmlEncode(displayName)}</span>`;
         } else {
             nameEl.innerHTML = `<span class="teacher-identity">👨‍🏫 ${_htmlEncode(t.name || t.username)}</span>`;
         }
