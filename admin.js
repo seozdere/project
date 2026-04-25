@@ -1,4 +1,4 @@
-﻿// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 //  ClassLog Pro — Admin Logic  (admin.js)  v3.1 fixed
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -340,7 +340,7 @@ function updateTeacherUI() {
             nameEl.innerHTML = `<span class="teacher-identity">Tahta oturumu: ${_htmlEncode(t.name || t.username || 'Öğretmen')}</span>`;
         }
         else if (ClassLogAuth.isAdmin()) {
-            nameEl.innerHTML = `<span class="admin-identity">👑 ${_htmlEncode(t.name || 'Sistem Yöneticisi')}</span>`;
+            nameEl.innerHTML = `<span class="admin-identity">👑 ${_htmlEncode(t.name || 'Sistem Y\u00f6neticisi')}</span>`;
         } else {
             nameEl.innerHTML = `<span class="teacher-identity">👨‍🏫 ${_htmlEncode(t.name || t.username)}</span>`;
         }
