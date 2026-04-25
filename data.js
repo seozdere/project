@@ -965,14 +965,14 @@ const ClassLogData = {
         let t;
         if (m >= 9) {
             ac = `${y}-${y + 1}`;
-            t = '1. Donem';
+            t = '1. Dönem';
         } else if (m === 1) {
             ac = `${y - 1}-${y}`;
-            t = '1. Donem';
+            t = '1. Dönem';
         } else {
             ac = `${y - 1}-${y}`;
-            t = '2. Donem';
+            t = '2. Dönem';
         }
-        return `${ac} Egitim Ogretim Yili ${t}`;
+        return `${ac} Eğitim Öğretim Yılı ${t}`;
     }
 };
