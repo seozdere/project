@@ -382,6 +382,7 @@ body.parent-page { font-family: 'Plus Jakarta Sans', sans-serif; background: var
 /* Renkli hücreler hover'da biraz koyulaşır, gri olmaz */
 .excel-grid-wrapper tbody tr:hover td.cell-pos     { background: #86efac !important; }
 .excel-grid-wrapper tbody tr:hover td.cell-neg     { background: #f87171 !important; }
+.excel-grid-wrapper tbody tr:hover td.cell-neg .hw-text-mark { color: white !important; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
 .excel-grid-wrapper tbody tr:hover td.cell-half    { background: #fde047 !important; }
 .excel-grid-wrapper tbody tr:hover td.cell-neutral { background: #f3e8ff !important; }
 .excel-grid-wrapper tbody tr:hover td.cell-absent  { background: #e5e7eb !important; }

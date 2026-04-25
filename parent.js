@@ -1,4 +1,4 @@
-﻿// ClassLog Pro - Parent View
+// ClassLog Pro - Parent View
 
 let students = [];
 let records = {};
@@ -59,6 +59,8 @@ function clearStoredParentSession() {
     sessionStorage.removeItem(PARENT_SESSION_EXPIRES_STORAGE_KEY);
 }
 
+let parentLastStateHash = '';
+
 async function refreshParentView(force = false) {
     const now = Date.now();
     if (parentRefreshInFlight) return false;
@@ -69,6 +71,13 @@ async function refreshParentView(force = false) {
         const ok = await syncParentState();
         if (!ok) return false;
         lastParentRefreshAt = Date.now();
+        
+        const currentStateHash = JSON.stringify({students, records, classRecords, notes, currentSubject, currentView});
+        if (!force && currentStateHash === parentLastStateHash) {
+            return true; // No visual changes needed, skip DOM re-render
+        }
+        parentLastStateHash = currentStateHash;
+
         renderSubjectTabs();
         updateBranding();
         renderCurrentView();
