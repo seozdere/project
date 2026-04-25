@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
@@ -15,7 +15,7 @@
     <meta name="apple-mobile-web-app-title" content="ClassLog Pro">
     <link rel="apple-touch-icon" href="icon-192.png">
     <link rel="stylesheet" href="style.css">
-    <script src="vendor/supabase.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         /* ── Kiosk Modu Banner ────────────────────────────────────────────────── */
         #kioskBanner {
@@ -239,10 +239,7 @@
                 <div class="admin-topbar-left">
                     <span class="badge">PRO</span>
                     <select id="classSelector" title="Sınıf Seç"></select>
-                    <div class="no-kiosk" style="display:inline-flex; gap:4px; margin-right:5px; background:var(--a-surface2); border:1px solid var(--a-border2); padding:2px; border-radius:var(--radius-sm);">
-                        <button id="copyExistingLinkBtn" class="tbtn tbtn-ghost" style="color:var(--a-accent); font-weight:600;" title="Mevcut Linki Kopyala">📋 Linki Kopyala</button>
-                        <button id="createNewLinkBtn" class="tbtn tbtn-ghost" style="color:var(--s-neg);" title="Yeni Link Oluştur (Öncekini iptal eder)">🔄 Yeni Link</button>
-                    </div>
+                    <button id="copyLinkBtn"       class="tbtn tbtn-accent no-kiosk">📋 Link</button>
                     <button id="qrBtn"             class="tbtn tbtn-accent admin-only" title="Akıllı Tahta QR">🖥️ Tahta QR</button>
                     <button id="pushToBoardBtn" class="tbtn tbtn-accent no-kiosk" title="Telefon ile tahtayı aç">📱→🖥️ Tahtayı Aç</button>
                     <button id="downloadParentBtn" class="tbtn tbtn-accent no-kiosk">⬇️ Veli HTML</button>
@@ -511,9 +508,9 @@
         </div>
     </div>
 
-    <script src="pwa.js?v=2" charset="utf-8"></script>
-    <script src="data.js?v=13" charset="utf-8"></script>
-    <script src="admin.js?v=13" charset="utf-8"></script>
+    <script src="pwa.js?v=2"></script>
+    <script src="data.js?v=12"></script>
+    <script src="admin.js?v=12"></script>
     <script>
     // Kiosk modundakileri göster
     if (new URLSearchParams(window.location.search).get('mode') === 'kiosk') {

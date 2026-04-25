@@ -1,4 +1,4 @@
-﻿// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 //  ClassLog Pro — Admin Logic  (admin.js)  v3.1 fixed
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -35,45 +35,6 @@ function getDataErrorMessage(fallback = 'Islem tamamlanamadi.') {
         ? ClassLogData.getLastError()
         : null;
     return lastError?.message || fallback;
-}
-
-const CLASSLOG_SECURITY_FLAGS = window.CLASSLOG_SECURITY || {
-    secureBoardPairingEnabled: false,
-    parentHtmlDownloadEnabled: false,
-    rotateParentLinksOnShare: true
-};
-
-function isSecureBoardPairingEnabled() {
-    return !!CLASSLOG_SECURITY_FLAGS.secureBoardPairingEnabled;
-}
-
-function isParentHtmlDownloadEnabled() {
-    return !!CLASSLOG_SECURITY_FLAGS.parentHtmlDownloadEnabled;
-}
-
-function renderSecurityLockScreen(title, message) {
-    document.body.innerHTML = `
-        <div style="min-height:100vh;background:var(--a-bg);display:flex;align-items:center;justify-content:center;padding:24px;">
-            <div style="width:100%;max-width:520px;background:rgba(15,23,42,.96);border:1px solid rgba(248,113,113,.25);border-radius:24px;padding:28px;box-shadow:0 28px 60px rgba(2,6,23,.45);text-align:center;">
-                <div style="font-size:2.8rem;margin-bottom:10px;">GUVENLIK</div>
-                <h2 style="color:#fca5a5;font-size:1.45rem;margin-bottom:10px;">${_htmlEncode(title)}</h2>
-                <p style="color:#cbd5e1;line-height:1.7;">${_htmlEncode(message)}</p>
-            </div>
-        </div>`;
-}
-
-function applySecurityFeatureVisibility() {
-    const boardButtons = ['qrBtn', 'pushToBoardBtn', 'closeBoardBtn'];
-    boardButtons.forEach(id => {
-        const element = document.getElementById(id);
-        if (!element) return;
-        element.style.display = isSecureBoardPairingEnabled() ? '' : 'none';
-    });
-
-    const downloadBtn = document.getElementById('downloadParentBtn');
-    if (downloadBtn && !isParentHtmlDownloadEnabled()) {
-        downloadBtn.style.display = 'none';
-    }
 }
 
 function getStoredKioskExpiry() {
@@ -348,7 +309,6 @@ function updateTeacherUI() {
     document.querySelectorAll('.admin-only').forEach(el => {
         el.style.display = ClassLogAuth.isAdmin() ? '' : 'none';
     });
-    applySecurityFeatureVisibility();
     if (sessionStorage.getItem('cl_kiosk')) {
         document.querySelectorAll('.no-kiosk').forEach(el => el.style.display = 'none');
         applyKioskRestrictions();
@@ -446,7 +406,7 @@ function renderSubjectTabs() {
         <button class="subject-tab ${s.id === ClassLogData.currentSubject ? 'active' : ''}"
                 style="--tab-color:${s.color}"
                 onclick="switchSubject('${s.id}')">
-            ${_htmlEncode(s.emoji)} ${_htmlEncode(s.label)}
+            ${s.emoji} ${s.label}
         </button>`).join('');
 }
 
@@ -500,17 +460,18 @@ function renderStudents() {
             const initials = getInitials(student);
             const status   = dayRec[student];
             const hasNote  = notes[student] ? 'note-active' : '';
+            const esc      = student.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
             return `
             <div class="student-card" data-index="${idx}">
-                <div class="s-avatar" style="background:${color};">${_htmlEncode(initials)}</div>
+                <div class="s-avatar" style="background:${color};">${initials}</div>
                 <span class="s-name">${_htmlEncode(student)}</span>
-                <button class="note-btn ${hasNote}" onclick="openNoteByIndex(${idx})">${notes[student] ? '📝' : '💬'}</button>
+                <button class="note-btn ${hasNote}" onclick="openNote('${esc}')">${notes[student] ? '📝' : '💬'}</button>
                 <div class="controls">
-                    <button class="btn btn-pos     ${status===1  ?'active':''}" onclick="setMarkByIndex(${idx},1)"  title="Tamam (+)">+</button>
-                    <button class="btn btn-neg     ${status===-1 ?'active':''}" onclick="setMarkByIndex(${idx},-1)" title="Eksik (-)">−</button>
-                    <button class="btn btn-half    ${status===2  ?'active':''}" onclick="setMarkByIndex(${idx},2)"  title="Yarım (●)">●</button>
-                    <button class="btn btn-neutral ${status===0  ?'active':''}" onclick="setMarkByIndex(${idx},0)"  title="Kitap Yok">●</button>
-                    <button class="btn btn-absent  ${status===3  ?'active':''}" onclick="setMarkByIndex(${idx},3)"  title="Gelmedi">●</button>
+                    <button class="btn btn-pos     ${status===1  ?'active':''}" onclick="setMark('${esc}',1)"  title="Tamam (+)">+</button>
+                    <button class="btn btn-neg     ${status===-1 ?'active':''}" onclick="setMark('${esc}',-1)" title="Eksik (-)">−</button>
+                    <button class="btn btn-half    ${status===2  ?'active':''}" onclick="setMark('${esc}',2)"  title="Yarım (●)">●</button>
+                    <button class="btn btn-neutral ${status===0  ?'active':''}" onclick="setMark('${esc}',0)"  title="Kitap Yok">●</button>
+                    <button class="btn btn-absent  ${status===3  ?'active':''}" onclick="setMark('${esc}',3)"  title="Gelmedi">●</button>
                 </div>
             </div>`;
         }).join('');
@@ -521,46 +482,23 @@ function renderStudents() {
             const dayStats = getClassMarkStats(dayRec[student]);
             const posCount = countClassStatus(student, 1);
             const negCount = countClassStatus(student, -1);
+            const esc      = student.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
             return `
             <div class="student-card" data-index="${idx}">
-                <div class="s-avatar" style="background:${color};">${_htmlEncode(initials)}</div>
+                <div class="s-avatar" style="background:${color};">${initials}</div>
                 <span class="s-name">${_htmlEncode(student)}</span>
                 <div class="class-score-mini">
                     <span class="csm-pos">+${posCount}</span>
                     <span class="csm-neg">−${negCount}</span>
                 </div>
                 <div class="controls">
-                    <button class="btn btn-pos ${dayStats.pos > 0 ? 'active' : ''}" onclick="setClassMarkByIndex(${idx},1)"  title="Artı ekle (+)" style="width:52px;font-size:1.2rem;">+${dayStats.pos > 0 ? dayStats.pos : ''}</button>
-                    <button class="btn btn-neg ${dayStats.neg > 0 ? 'active' : ''}" onclick="setClassMarkByIndex(${idx},-1)" title="Eksi ekle (−)" style="width:52px;font-size:1.2rem;">−${dayStats.neg > 0 ? dayStats.neg : ''}</button>
+                    <button class="btn btn-pos ${dayStats.pos > 0 ? 'active' : ''}" onclick="setClassMark('${esc}',1)"  title="Artı ekle (+)" style="width:52px;font-size:1.2rem;">+${dayStats.pos > 0 ? dayStats.pos : ''}</button>
+                    <button class="btn btn-neg ${dayStats.neg > 0 ? 'active' : ''}" onclick="setClassMark('${esc}',-1)" title="Eksi ekle (−)" style="width:52px;font-size:1.2rem;">−${dayStats.neg > 0 ? dayStats.neg : ''}</button>
                 </div>
             </div>`;
         }).join('');
     }
 }
-
-function getStudentByIndex(index) {
-    const numericIndex = Number(index);
-    if (!Number.isInteger(numericIndex) || numericIndex < 0 || numericIndex >= students.length) return null;
-    return students[numericIndex] || null;
-}
-
-window.openNoteByIndex = function(index) {
-    const student = getStudentByIndex(index);
-    if (!student) return;
-    openNote(student);
-};
-
-window.setMarkByIndex = function(index, status) {
-    const student = getStudentByIndex(index);
-    if (!student) return;
-    return setMark(student, status);
-};
-
-window.setClassMarkByIndex = function(index, status) {
-    const student = getStudentByIndex(index);
-    if (!student) return;
-    return setClassMark(student, status);
-};
 
 function updateCardButtons(studentName, newStatus) {
     const idx  = students.indexOf(studentName);
@@ -1071,52 +1009,25 @@ if (nextDateBtn) nextDateBtn.onclick = () => {
 // ─── Link Kopyala ─────────────────────────────────────────────────────────────
 async function updateParentViewHref(className = ClassLogData.currentClass) {
     if (!viewToggle) return;
-    viewToggle.href = 'parent.html';
-    viewToggle.onclick = async event => {
-        event.preventDefault();
-        const linkCode = await ClassLogData.ensureParentLink(
-            className,
-            !!CLASSLOG_SECURITY_FLAGS.rotateParentLinksOnShare
-        );
-        if (!linkCode) {
-            alert(getDataErrorMessage('Veli gorunumu acilamadi.'));
-            return;
-        }
-        window.location.href = `parent.html?link=${encodeURIComponent(linkCode)}`;
-    };
+    const token = await ClassLogData.ensureParentToken(className);
+    viewToggle.href = token ? `parent.html?id=${encodeURIComponent(token)}` : 'parent.html';
 }
 
-const copyExistingLinkBtn = document.getElementById('copyExistingLinkBtn');
-if (copyExistingLinkBtn) copyExistingLinkBtn.onclick = async () => {
-    const linkCode = await ClassLogData.ensureParentLink(ClassLogData.currentClass, false);
-    if (!linkCode) { alert(getDataErrorMessage('Veli linki uretilemedi.')); return; }
-    const url = `${window.location.origin}${window.location.pathname.replace('admin.html','parent.html')}?link=${encodeURIComponent(linkCode)}`;
+const copyLinkBtn = document.getElementById('copyLinkBtn');
+if (copyLinkBtn) copyLinkBtn.onclick = async () => {
+    const token = await ClassLogData.ensureParentToken(ClassLogData.currentClass);
+    if (!token) { alert(getDataErrorMessage('Veli linki üretilemedi.')); return; }
+    const url = `${window.location.origin}${window.location.pathname.replace('admin.html','parent.html')}?id=${encodeURIComponent(token)}`;
     navigator.clipboard.writeText(url).then(() => {
-        const orig = copyExistingLinkBtn.textContent;
-        copyExistingLinkBtn.textContent = "✅ Kopyalandı!";
-        setTimeout(() => copyExistingLinkBtn.textContent = orig, 2200);
-    });
-};
-
-const createNewLinkBtn = document.getElementById('createNewLinkBtn');
-if (createNewLinkBtn) createNewLinkBtn.onclick = async () => {
-    if (!confirm('🚨 DİKKAT: Yeni bir link oluşturduğunuzda, daha önce paylaştığınız veli linki GÜVENLİK gereği iptal olacaktır.\n\nYeni link oluşturmayı onaylıyor musunuz?')) return;
-    const linkCode = await ClassLogData.ensureParentLink(ClassLogData.currentClass, true);
-    if (!linkCode) { alert(getDataErrorMessage('Veli linki uretilemedi.')); return; }
-    const url = `${window.location.origin}${window.location.pathname.replace('admin.html','parent.html')}?link=${encodeURIComponent(linkCode)}`;
-    navigator.clipboard.writeText(url).then(() => {
-        const orig = createNewLinkBtn.textContent;
-        createNewLinkBtn.textContent = "✅ Kopyalandı!";
-        setTimeout(() => createNewLinkBtn.textContent = orig, 2200);
+        const orig = copyLinkBtn.textContent;
+        copyLinkBtn.textContent = "✅ Kopyalandı!";
+        setTimeout(() => copyLinkBtn.textContent = orig, 2200);
     });
 };
 
 // ─── Tahta / Cihaz Eşleştirme ────────────────────────────────────────────────
 // ─── Tahtayı Aç: telefon butonuyla sabit kanala kimlik gönder ────────────────
 async function buildBoardUnlockPayload(boardCode, contextOverride = null) {
-    if (!isSecureBoardPairingEnabled()) {
-        throw new Error('Tahta eslestirme gecici olarak kapatildi. Guvenli sunucu yamasi uygulanmali.');
-    }
     const normalizedBoardCode = normalizeBoardCode(boardCode);
     if (!/^\d{6}$/.test(normalizedBoardCode)) {
         throw new Error('Geçerli bir tahta kodu girin.');
@@ -1151,10 +1062,6 @@ async function sendBoardCommand(eventName, payload = {}) {
 
 const pushToBoardBtn = document.getElementById('pushToBoardBtn');
 if (pushToBoardBtn) pushToBoardBtn.onclick = async () => {
-    if (!isSecureBoardPairingEnabled()) {
-        alert('Tahta ozelligi guvenli sunucu yamasi bekledigi icin simdilik kapali.');
-        return;
-    }
     const orig = pushToBoardBtn.textContent;
     const boardCode = promptForBoardCode();
     if (!boardCode) return;
@@ -1180,10 +1087,6 @@ if (pushToBoardBtn) pushToBoardBtn.onclick = async () => {
 
 const closeBoardBtn = document.getElementById('closeBoardBtn');
 if (closeBoardBtn) closeBoardBtn.onclick = async () => {
-    if (!isSecureBoardPairingEnabled()) {
-        alert('Tahta ozelligi guvenli sunucu yamasi bekledigi icin simdilik kapali.');
-        return;
-    }
     const orig = closeBoardBtn.textContent;
     const boardCode = getStoredBoardTargetCode() || promptForBoardCode('Kapatilacak tahta kodunu girin');
     if (!boardCode) return;
@@ -1214,13 +1117,6 @@ if (closeBoardBtn) closeBoardBtn.onclick = async () => {
 async function handleRemoteAuthIfNeeded() {
     const authReq = _authReqParam;
     if (!authReq || !ClassLogAuth.isLoggedIn()) return false;
-    if (!isSecureBoardPairingEnabled()) {
-        renderSecurityLockScreen(
-            'Tahta ozelligi kapali',
-            'Bu kurulumda tahta eslestirme ozelligi guvenlik nedeniyle devre disi. Sunucu yamasi uygulanmadan acilmiyor.'
-        );
-        return true;
-    }
 
     await ClassLogData.syncSettings();
     const teacher = ClassLogAuth.getTeacher() || {};
@@ -1322,10 +1218,6 @@ const qrBtn = document.getElementById('qrBtn');
 if (qrBtn) qrBtn.onclick = showBoardQR;
 
 function showBoardQR() {
-    if (!isSecureBoardPairingEnabled()) {
-        alert('Tahta QR ozelligi guvenli sunucu yamasi gelene kadar kapali.');
-        return;
-    }
     const modal   = document.getElementById('qrModal');
     const label   = document.getElementById('qrClassLabel');
     const img     = document.getElementById('qrImage');
@@ -1435,7 +1327,7 @@ window.editTeacher = async function(id) {
     const tSubjects = document.getElementById('tSubjects');
     if (tSubjects) tSubjects.innerHTML = SUBJECTS.map(s => `
         <label class="class-check" style="--chk-color:${s.color}20;border-color:${s.color}40;">
-            <input type="checkbox" name="tSubject" value="${s.id}" ${(t.subjects||[]).includes(s.id)?'checked':''}> ${_htmlEncode(s.emoji)} ${_htmlEncode(s.label)}
+            <input type="checkbox" name="tSubject" value="${s.id}" ${(t.subjects||[]).includes(s.id)?'checked':''}> ${s.emoji} ${_htmlEncode(s.label)}
         </label>`).join('');
 
     if (tForm) tForm.style.display = 'block';
@@ -1605,7 +1497,7 @@ window.renderSubjectManager = function() {
     container.innerHTML = SUBJECTS.map((s, idx) => `
         <div style="display:flex;align-items:center;justify-content:space-between;background:var(--a-surface);padding:10px 14px;border-radius:8px;border:1px solid var(--a-border2);">
             <div style="display:flex;align-items:center;gap:10px;">
-                <div style="width:24px;height:24px;border-radius:50%;background:${s.color};display:flex;align-items:center;justify-content:center;font-size:.8rem;">${_htmlEncode(s.emoji)}</div>
+                <div style="width:24px;height:24px;border-radius:50%;background:${s.color};display:flex;align-items:center;justify-content:center;font-size:.8rem;">${s.emoji}</div>
                 <strong style="color:var(--a-text);font-size:.9rem;">${_htmlEncode(s.label)}</strong>
             </div>
             <label style="font-size:.78rem;color:var(--a-muted);display:flex;align-items:center;gap:6px;cursor:pointer;" title="Veli panelinde göster/gizle">
@@ -1629,34 +1521,13 @@ window.addNewSubject = async function() {
     const emojiInput = document.getElementById('newSubjEmoji');
     const labelInput = document.getElementById('newSubjLabel');
     const colorInput = document.getElementById('newSubjColor');
-    const draft = typeof window.ClassLogSanitizeSubjectDefinition === 'function'
-        ? window.ClassLogSanitizeSubjectDefinition({
-            emoji: emojiInput?.value,
-            label: labelInput?.value,
-            color: colorInput?.value
-        }, SUBJECTS.length)
-        : null;
     const emoji = (emojiInput?.value.trim()) || '📚';
     const label = labelInput?.value.trim();
     const color = colorInput?.value || '#6366F1';
     if (!label) { alert("Ders adı boş olamaz."); return; }
     const id = label.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const safeSubject = draft || {
-        id,
-        label,
-        emoji,
-        color,
-        showInParent: false
-    };
-    if (!safeSubject.label || !safeSubject.id) { alert('Ders adi bos olamaz.'); return; }
-    if (SUBJECTS.find(s => s.id === safeSubject.id)) { alert("Bu isimde bir ders zaten var."); return; }
-    SUBJECTS.push({
-        id: safeSubject.id,
-        label: safeSubject.label,
-        emoji: safeSubject.emoji,
-        color: safeSubject.color,
-        showInParent: false
-    });
+    if (SUBJECTS.find(s => s.id === id)) { alert("Bu isimde bir ders zaten var."); return; }
+    SUBJECTS.push({ id, label, emoji, color, showInParent: false });
     setSaveStatus('Ders ekleniyor...', 'status-saving', true);
     if (!await ClassLogData.saveSettings()) { setSaveStatus('Ders kaydi hatali', 'status-error'); alert('Ders kaydedilemedi.'); return; }
     if (emojiInput) emojiInput.value = '';
@@ -1745,17 +1616,13 @@ if (savePwBtn) savePwBtn.onclick = async () => {
 // ─── Veli HTML İndir ─────────────────────────────────────────────────────────
 const downloadParentBtn = document.getElementById('downloadParentBtn');
 if (downloadParentBtn) downloadParentBtn.onclick = async function() {
-    if (!isParentHtmlDownloadEnabled()) {
-        alert('Veli HTML indirme ozelligi token sizintisi riskinden dolayi kapali.');
-        return;
-    }
     const original = this.textContent;
     this.textContent = 'Hazirlaniyor...';
     this.disabled = true;
     try {
-        const linkCode = await ClassLogData.ensureParentLink(ClassLogData.currentClass);
-        if (!linkCode) throw new Error('Veli linki olusturulamadi.');
-        const url = `${window.location.origin}${window.location.pathname.replace('admin.html','parent.html')}?link=${encodeURIComponent(linkCode)}`;
+        const token = await ClassLogData.ensureParentToken(ClassLogData.currentClass);
+        if (!token) throw new Error('Veli linki olusturulamadi.');
+        const url = `${window.location.origin}${window.location.pathname.replace('admin.html','parent.html')}?id=${encodeURIComponent(token)}`;
         const html = buildParentRedirectHTML(ClassLogData.currentClass, url);
         const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
         const link = Object.assign(document.createElement('a'), {
@@ -2028,13 +1895,6 @@ function ensureBoardControlChannel() {
 }
 
 function initBoardMode() {
-    if (!isSecureBoardPairingEnabled()) {
-        renderSecurityLockScreen(
-            'Tahta modu kapali',
-            'Bu deploy guvenli board kanali ayarlari olmadan tahta modunu acmaz.'
-        );
-        return;
-    }
     showBoardWaitingState();
     ensureBoardControlChannel();
 }
@@ -2067,13 +1927,6 @@ function initBoardMode() {
 
     // ── Auth request: telefon kamera QR tarattı ──────────────────────────────
     if (_authReqParam) {
-        if (!isSecureBoardPairingEnabled()) {
-            renderSecurityLockScreen(
-                'Tahta eslestirme kapali',
-                'Bu deploy guvenlik nedeniyle QR ile tahta acma ozelligini kullanmiyor.'
-            );
-            return;
-        }
         if (ClassLogAuth.isLoggedIn()) {
             // Zaten giriş yapılmış (aynı sekmede) → direkt gönder
             await handleRemoteAuthIfNeeded();

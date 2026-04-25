@@ -1,4 +1,4 @@
-﻿// ClassLog Pro - Parent View
+// ClassLog Pro - Parent View
 
 let students = [];
 let records = {};
@@ -13,50 +13,19 @@ let parentPollTimer = null;
 let parentLocalRealtimeCleanup = null;
 let parentRefreshInFlight = false;
 let lastParentRefreshAt = 0;
-let parentUsesLegacyToken = false;
-const PARENT_SESSION_STORAGE_KEY = 'cl_parent_session';
-const PARENT_SESSION_EXPIRES_STORAGE_KEY = 'cl_parent_session_expires_at';
 
 function escQ(s) {
     return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 async function syncParentState() {
-    const ok = parentUsesLegacyToken
-        ? await ClassLogData.syncParent(currentParentToken)
-        : await ClassLogData.syncParentSession(currentParentToken);
+    const ok = await ClassLogData.syncParent(currentParentToken);
     if (!ok) return false;
     students = ClassLogData.getStudents();
     records = ClassLogData.getRecords();
     classRecords = ClassLogData.getClassRecords();
     notes = ClassLogData.getNotes();
     return true;
-}
-
-function storeParentSession(session) {
-    if (!session?.sessionToken) return;
-    sessionStorage.setItem(PARENT_SESSION_STORAGE_KEY, session.sessionToken);
-    if (session.expiresAt) {
-        sessionStorage.setItem(PARENT_SESSION_EXPIRES_STORAGE_KEY, String(session.expiresAt));
-    } else {
-        sessionStorage.removeItem(PARENT_SESSION_EXPIRES_STORAGE_KEY);
-    }
-}
-
-function readStoredParentSession() {
-    const sessionToken = sessionStorage.getItem(PARENT_SESSION_STORAGE_KEY);
-    if (!sessionToken) return null;
-    const expiresAt = sessionStorage.getItem(PARENT_SESSION_EXPIRES_STORAGE_KEY);
-    if (expiresAt && Date.parse(expiresAt) <= Date.now()) {
-        clearStoredParentSession();
-        return null;
-    }
-    return { sessionToken, expiresAt };
-}
-
-function clearStoredParentSession() {
-    sessionStorage.removeItem(PARENT_SESSION_STORAGE_KEY);
-    sessionStorage.removeItem(PARENT_SESSION_EXPIRES_STORAGE_KEY);
 }
 
 async function refreshParentView(force = false) {
@@ -92,7 +61,7 @@ function renderSubjectTabs() {
         <button class="subject-tab-parent ${subject.id === currentSubject ? 'active' : ''}"
                 style="--tab-color:${subject.color}"
                 onclick="switchSubjectParent('${subject.id}')">
-            ${_htmlEncode(subject.emoji)} ${_htmlEncode(subject.label)}
+            ${subject.emoji} ${subject.label}
         </button>
     `).join('');
 }
@@ -183,12 +152,12 @@ function renderExcel() {
     }
 
     let bodyHTML = '';
-    students.forEach((student, idx) => {
+    students.forEach(student => {
         const hasNote = notes[student];
         bodyHTML += `<tr>
-            <td class="sticky-col student-name" onclick="showStudentSummaryByIndex(${idx})" style="cursor:pointer;">
+            <td class="sticky-col student-name" onclick="showStudentSummary('${escQ(student)}')" style="cursor:pointer;">
                 <strong>${_htmlEncode(student)}</strong>${hasNote
-                    ? `<span class="note-indicator" onclick="event.stopPropagation();showNoteByIndex(${idx})">?</span>`
+                    ? `<span class="note-indicator" onclick="event.stopPropagation();showNote('${escQ(student)}')">?</span>`
                     : ''}
             </td>`;
         dates.forEach(date => {
@@ -201,8 +170,8 @@ function renderExcel() {
                 cellClass = `cell-active cell-${meta.class}`;
             }
             bodyHTML += `<td class="${cellClass}"
-                onmouseover="updateStatusInfoByIndex(${idx},'${date}',${JSON.stringify(status)})"
-                onclick="updateStatusInfoByIndex(${idx},'${date}',${JSON.stringify(status)},true)">${dot}</td>`;
+                onmouseover="updateStatusInfo('${escQ(student)}','${date}',${JSON.stringify(status)})"
+                onclick="updateStatusInfo('${escQ(student)}','${date}',${JSON.stringify(status)},true)">${dot}</td>`;
         });
         bodyHTML += '</tr>';
     });
@@ -243,7 +212,6 @@ function renderClassView() {
 
     let bodyHTML = '';
     activeStudents.forEach(student => {
-        const studentIndex = students.indexOf(student);
         const hasNote = notes[student];
         let posCount = 0;
         let negCount = 0;
@@ -265,7 +233,7 @@ function renderClassView() {
                 if (stats.neg > 0) {
                     marks += `<span class="class-mark neg-mark">${stats.pos > 0 ? ' ' : ''}−${stats.neg}</span>`;
                 }
-                cells += `<td class="${cellClass} class-cell" onmouseover="updateClassStatusInfoByIndex(${studentIndex},'${date}',${stats.pos},${stats.neg})">${marks}</td>`;
+                cells += `<td class="${cellClass} class-cell" onmouseover="updateClassStatusInfo('${escQ(student)}','${date}',${stats.pos},${stats.neg})">${marks}</td>`;
             } else {
                 cells += '<td class="class-cell class-cell-empty"></td>';
             }
@@ -282,9 +250,9 @@ function renderClassView() {
 
         cells += `<td class="class-cell total-cell"><span class="total-badge" style="background:#f8fafc;border:1px solid #e2e8f0;padding:2px 8px;width:fit-content;margin:0 auto;height:auto">${totalBadge}</span></td>`;
         bodyHTML += `<tr>
-            <td class="sticky-col student-name" onclick="showStudentSummaryClassByIndex(${studentIndex})" style="cursor:pointer;">
+            <td class="sticky-col student-name" onclick="showStudentSummaryClass('${escQ(student)}')" style="cursor:pointer;">
                 <strong>${_htmlEncode(student)}</strong>${hasNote
-                    ? `<span class="note-indicator" onclick="event.stopPropagation();showNoteByIndex(${studentIndex})">?</span>`
+                    ? `<span class="note-indicator" onclick="event.stopPropagation();showNote('${escQ(student)}')">?</span>`
                     : ''}
             </td>${cells}</tr>`;
     });
@@ -355,42 +323,6 @@ window.showNote = function(student) {
     if (!popup) return;
     document.getElementById('notePopupContent').innerHTML = `<strong>📝 ${_htmlEncode(student)}</strong><p>${_htmlEncode(note)}</p>`;
     popup.style.display = 'block';
-};
-
-function getParentStudentByIndex(index) {
-    const numericIndex = Number(index);
-    if (!Number.isInteger(numericIndex) || numericIndex < 0 || numericIndex >= students.length) return null;
-    return students[numericIndex] || null;
-}
-
-window.showNoteByIndex = function(index) {
-    const student = getParentStudentByIndex(index);
-    if (!student) return;
-    showNote(student);
-};
-
-window.showStudentSummaryByIndex = function(index) {
-    const student = getParentStudentByIndex(index);
-    if (!student) return;
-    showStudentSummary(student);
-};
-
-window.showStudentSummaryClassByIndex = function(index) {
-    const student = getParentStudentByIndex(index);
-    if (!student) return;
-    showStudentSummaryClass(student);
-};
-
-window.updateStatusInfoByIndex = function(index, date, status) {
-    const student = getParentStudentByIndex(index);
-    if (!student) return;
-    updateStatusInfo(student, date, status);
-};
-
-window.updateClassStatusInfoByIndex = function(index, date, pos, neg) {
-    const student = getParentStudentByIndex(index);
-    if (!student) return;
-    updateClassStatusInfo(student, date, pos, neg);
 };
 
 window.showStudentSummary = function(student) {
@@ -503,6 +435,11 @@ function subscribeRealtime() {
 
     const handler = async () => { await refreshParentView(true); };
 
+    parentSubjectChannel = _supabase
+        .channel(_parentSyncChannelName(currentParentToken))
+        .on('broadcast', { event: 'refresh' }, handler)
+        .subscribe();
+
     parentGlobalChannel = _supabase
         .channel(CLASSLOG_PARENT_GLOBAL_CHANNEL)
         .on('broadcast', { event: 'refresh' }, handler)
@@ -536,67 +473,23 @@ function parentVisibilityRefresh() {
 
 async function init() {
     const urlParams = new URLSearchParams(window.location.search);
-    const linkCode = urlParams.get('link');
-    const legacyToken = urlParams.get('id');
+    const token = urlParams.get('id');
     const loading = document.getElementById('loadingScreen');
     const dashboard = document.getElementById('mainDashboard');
     const invalid = document.getElementById('invalidScreen');
 
-    if (linkCode) {
-        const session = await ClassLogData.exchangeParentLink(linkCode);
-        if (!session?.sessionToken) {
-            clearStoredParentSession();
-            if (loading) loading.style.display = 'none';
-            if (invalid) invalid.style.display = 'flex';
-            return;
-        }
-        storeParentSession(session);
-        parentUsesLegacyToken = false;
-        currentParentToken = session.sessionToken;
-        ClassLogData.parentSessionToken = session.sessionToken;
-        try {
-            window.history.replaceState({}, document.title, window.location.pathname);
-        } catch (error) {}
-    } else {
-        const storedSession = readStoredParentSession();
-        if (storedSession?.sessionToken) {
-            parentUsesLegacyToken = false;
-            currentParentToken = storedSession.sessionToken;
-            ClassLogData.parentSessionToken = storedSession.sessionToken;
-        } else if (legacyToken) {
-            parentUsesLegacyToken = true;
-            currentParentToken = legacyToken;
-            ClassLogData.parentToken = legacyToken;
-            try {
-                window.history.replaceState({}, document.title, window.location.pathname);
-            } catch (error) {}
-            const ok = await ClassLogData.syncParent(legacyToken);
-            if (!ok) {
-                if (loading) loading.style.display = 'none';
-                if (invalid) invalid.style.display = 'flex';
-                return;
-            }
-            if (loading) loading.style.display = 'none';
-            if (dashboard) dashboard.style.display = 'flex';
-            renderSubjectTabs();
-            switchView(currentView);
-            lastParentRefreshAt = Date.now();
-            subscribeRealtime();
-            return;
-        }
-    }
-
-    if (!currentParentToken) {
+    if (!token) {
         if (loading) loading.style.display = 'none';
         if (invalid) invalid.style.display = 'flex';
         return;
     }
 
+    currentParentToken = token;
+    ClassLogData.parentToken = token;
     ClassLogData.currentSubject = currentSubject;
 
     const ok = await syncParentState();
     if (!ok) {
-        clearStoredParentSession();
         if (loading) loading.style.display = 'none';
         if (invalid) invalid.style.display = 'flex';
         return;

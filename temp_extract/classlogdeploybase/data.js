@@ -1,7 +1,7 @@
-﻿// Shared data layer for ClassLog Pro
+// Shared data layer for ClassLog Pro
 
-const SUPABASE_URL = "https://bpkneixqzcpvaoytgcso.supabase.co";
-const SUPABASE_KEY = "sb_publishable_6BlMzOjGZWl7FG4Rddn5BA_X9A1wbLJ";
+const SUPABASE_URL = "https://hshpppvwuuklewinvjeu.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhzaHBwcHZ3dXVrbGV3aW52amV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODE1NTcsImV4cCI6MjA5MTc1NzU1N30.gW2UC46GwVUfDMnxceAP_vslXsNRnAuQMqcofhwqsmA";
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const CLASSLOG_CLIENT_ID = (() => {
@@ -16,22 +16,16 @@ const CLASSLOG_CLIENT_ID = (() => {
     }
 })();
 if (typeof window !== 'undefined') window.CLASSLOG_CLIENT_ID = CLASSLOG_CLIENT_ID;
-const CLASSLOG_SECURITY = Object.freeze({
-    secureBoardPairingEnabled: false,
-    parentHtmlDownloadEnabled: false,
-    rotateParentLinksOnShare: true
-});
-if (typeof window !== 'undefined') window.CLASSLOG_SECURITY = CLASSLOG_SECURITY;
 
 const SCHOOL_NAME = "Büyükşehir Belediyesi Gazi Mustafa Kemal Ortaokulu";
 const SCHOOL_SHORT = "BBGMKO";
 
-const SUBJECTS = _sanitizeSubjectList([
-    { id: 'turkce', label: 'Türkçe', emoji: '📖', color: '#6366F1', showInParent: true },
-    { id: 'mat', label: 'Matematik', emoji: '📐', color: '#0EA5E9', showInParent: true },
-    { id: 'fen', label: 'Fen Bilimleri', emoji: '🔬', color: '#10B981', showInParent: true },
-    { id: 'sosyal', label: 'Sosyal Bilgiler', emoji: '🌍', color: '#F59E0B', showInParent: true },
-]);
+const SUBJECTS = [
+    { id: 'turkce', label: 'Türkçe',        emoji: '📖', color: '#6366F1', showInParent: true  },
+    { id: 'mat',    label: 'Matematik',     emoji: '📐', color: '#0EA5E9', showInParent: true  },
+    { id: 'fen',    label: 'Fen Bilimleri', emoji: '🔬', color: '#10B981', showInParent: true  },
+    { id: 'sosyal', label: 'Sosyal Bilgiler', emoji: '🌍', color: '#F59E0B', showInParent: true  },
+];
 
 const CLASSLOG_PARENT_GLOBAL_CHANNEL = 'classlog_parent_global_v33';
 const CLASSLOG_TEACHER_GLOBAL_CHANNEL = 'classlog_teacher_global_v33';
@@ -40,7 +34,7 @@ const CLASSLOG_LOCAL_TEACHER_EVENT = 'classlog_teacher_refresh_local_v34';
 
 // Sabit tahta kanalı — QR kodu hiç değişmez
 const CLASSLOG_BOARD_FIXED_ID = 'CLASSLOG_BOARD_BBGMKO_V1';
-const CLASSLOG_BOARD_CHANNEL = 'board_auth_' + CLASSLOG_BOARD_FIXED_ID;
+const CLASSLOG_BOARD_CHANNEL  = 'board_auth_' + CLASSLOG_BOARD_FIXED_ID;
 
 function _htmlEncode(str) {
     return String(str)
@@ -50,76 +44,6 @@ function _htmlEncode(str) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 }
-
-function _normalizeWhitespace(value) {
-    return String(value || '').replace(/\s+/g, ' ').trim();
-}
-
-function _slugifySubjectId(value) {
-    const normalized = _normalizeWhitespace(value)
-        .toLocaleLowerCase('tr-TR')
-        .normalize('NFKD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '');
-    return normalized.slice(0, 24);
-}
-
-function _sanitizeHexColor(value, fallback = '#6366F1') {
-    const normalized = String(value || '').trim();
-    return /^#[0-9a-fA-F]{6}$/.test(normalized) ? normalized.toUpperCase() : fallback;
-}
-
-function _sanitizeSubjectLabel(value, fallback = 'Ders') {
-    const normalized = _normalizeWhitespace(value)
-        .replace(/[<>`"'\\]/g, '')
-        .replace(/[\u0000-\u001F\u007F]/g, '');
-    return normalized.slice(0, 40) || fallback;
-}
-
-function _sanitizeSubjectEmoji(value, fallback = 'Ders') {
-    const normalized = _normalizeWhitespace(value)
-        .replace(/[<>`"'\\]/g, '')
-        .replace(/[\u0000-\u001F\u007F]/g, '');
-    return normalized.slice(0, 8) || fallback;
-}
-
-function _sanitizeSubjectDefinition(subject, index = 0) {
-    const label = _sanitizeSubjectLabel(subject?.label, `Ders ${index + 1}`);
-    const fallbackId = index === 0 ? 'turkce' : `subject${index + 1}`;
-    const id = _slugifySubjectId(subject?.id || label) || fallbackId;
-    return {
-        id,
-        label,
-        emoji: _sanitizeSubjectEmoji(subject?.emoji, 'Ders'),
-        color: _sanitizeHexColor(subject?.color, '#6366F1'),
-        showInParent: subject?.showInParent !== false
-    };
-}
-
-function _sanitizeSubjectList(subjects) {
-    const next = [];
-    const seen = new Set();
-    for (const [index, subject] of (Array.isArray(subjects) ? subjects : []).entries()) {
-        const clean = _sanitizeSubjectDefinition(subject, index);
-        if (seen.has(clean.id)) continue;
-        seen.add(clean.id);
-        next.push(clean);
-    }
-    if (!next.length) {
-        return [
-            { id: 'turkce', label: 'Turkce', emoji: 'TR', color: '#6366F1', showInParent: true },
-            { id: 'mat', label: 'Matematik', emoji: 'MT', color: '#0EA5E9', showInParent: true },
-            { id: 'fen', label: 'Fen Bilimleri', emoji: 'FN', color: '#10B981', showInParent: true },
-            { id: 'sosyal', label: 'Sosyal Bilgiler', emoji: 'SB', color: '#F59E0B', showInParent: true }
-        ];
-    }
-    return next.map(subject => {
-        if (subject.id === 'turkce') subject.showInParent = true;
-        if (subject.label === 'Fen Bilgisi') subject.label = 'Fen Bilimleri';
-        return subject;
-    });
-}
-if (typeof window !== 'undefined') window.ClassLogSanitizeSubjectDefinition = _sanitizeSubjectDefinition;
 
 function _safeChannelId(value) {
     return encodeURIComponent(String(value)).replace(/%/g, '_');
@@ -139,7 +63,7 @@ const _browserChannelCache = new Map();
 function _cloneData(value) {
     if (value === null || value === undefined) return value;
     if (typeof structuredClone === 'function') {
-        try { return structuredClone(value); } catch (error) { }
+        try { return structuredClone(value); } catch (error) {}
     }
     return JSON.parse(JSON.stringify(value));
 }
@@ -199,16 +123,16 @@ function _emitLocalRealtime(name, payload = {}) {
     try {
         localStorage.setItem(name, JSON.stringify(eventPayload));
         localStorage.removeItem(name);
-    } catch (error) { }
+    } catch (error) {}
 
     try {
         const channel = _getBrowserChannel(name);
         if (channel) channel.postMessage(eventPayload);
-    } catch (error) { }
+    } catch (error) {}
 }
 
 function _listenLocalRealtime(name, handler) {
-    if (typeof window === 'undefined') return () => { };
+    if (typeof window === 'undefined') return () => {};
 
     const onStorage = event => {
         if (event.key !== name || !event.newValue) return;
@@ -304,7 +228,7 @@ const ClassLogAuth = {
         const token = this.getSessionToken();
         if (token) {
             try {
-                _supabase.rpc('cl_logout', { p_token: token }).catch(() => { });
+                _supabase.rpc('cl_logout', { p_token: token }).catch(() => {});
             } catch (error) {
                 console.error('Logout error:', error);
             }
@@ -451,11 +375,7 @@ const ClassLogData = {
     viewingTermId: null,
     terms: [],
     parentToken: null,
-    parentLinkCode: null,
-    parentSessionToken: null,
-    parentSessionExpiresAt: null,
     parentTokenCache: {},
-    parentLinkCache: {},
     syncMeta: {
         source: 'idle',
         lastSyncAt: null,
@@ -465,10 +385,10 @@ const ClassLogData = {
     },
     lastError: null,
     availableClasses: [
-        '5A', '5B', '5C', '5D', '5E', '5F', '5G', '5H', '5I', '5İ', '5J',
-        '6A', '6B', '6C', '6D', '6E', '6F', '6G', '6H', '6I', '6İ', '6J',
-        '7A', '7B', '7C', '7D', '7E', '7F', '7G', '7H', '7I', '7İ', '7J',
-        '8A', '8B', '8C', '8D', '8E', '8F', '8G', '8H', '8I', '8İ', '8J'
+        '5A','5B','5C','5D','5E','5F','5G','5H','5I','5İ','5J',
+        '6A','6B','6C','6D','6E','6F','6G','6H','6I','6İ','6J',
+        '7A','7B','7C','7D','7E','7F','7G','7H','7I','7İ','7J',
+        '8A','8B','8C','8D','8E','8F','8G','8H','8I','8İ','8J'
     ],
 
     _allowedHomeworkStatuses: new Set([1, -1, 0, 2, 3]),
@@ -524,7 +444,14 @@ const ClassLogData = {
         if (!settings || typeof settings !== 'object') return;
 
         if (Array.isArray(settings.subjects)) {
-            SUBJECTS.splice(0, SUBJECTS.length, ..._sanitizeSubjectList(settings.subjects));
+            SUBJECTS.splice(0, SUBJECTS.length, ...settings.subjects);
+            SUBJECTS.forEach(subject => {
+                if (subject.showInParent === undefined || subject.showInParent === null) {
+                    subject.showInParent = true;
+                }
+                if (subject.id === 'turkce') subject.showInParent = true;
+                if (subject.label === 'Fen Bilgisi') subject.label = 'Fen Bilimleri';
+            });
         }
 
         this.termString = settings.termString || null;
@@ -623,63 +550,6 @@ const ClassLogData = {
         }
     },
 
-    async exchangeParentLink(parentLinkCode = this.parentLinkCode) {
-        if (!parentLinkCode) {
-            this._setError('Veli baglantisi eksik.');
-            return null;
-        }
-        try {
-            const { data, error } = await _supabase.rpc('cl_parent_exchange_link', {
-                p_link_code: parentLinkCode
-            });
-            if (error || !data?.ok || !data.session_token) {
-                console.error('Parent link exchange error:', error || data);
-                this._setError('Veli oturumu baslatilamadi.', error || data);
-                return null;
-            }
-            this.parentLinkCode = parentLinkCode;
-            this.parentSessionToken = data.session_token;
-            this.parentSessionExpiresAt = data.expires_at || null;
-            this._clearError();
-            return {
-                sessionToken: data.session_token,
-                expiresAt: data.expires_at || null
-            };
-        } catch (error) {
-            console.error('Parent link exchange exception:', error);
-            this._setError('Veli oturumu baslatilamadi.', error);
-            return null;
-        }
-    },
-
-    async syncParentSession(parentSessionToken = this.parentSessionToken) {
-        if (!parentSessionToken) {
-            this._setError('Veli oturumu eksik.');
-            return false;
-        }
-        try {
-            const { data, error } = await _supabase.rpc('cl_get_parent_view_v2', {
-                p_session_token: parentSessionToken,
-                p_subject_id: this.currentSubject
-            });
-            if (error || !data?.ok) {
-                console.error('Parent session sync error:', error || data);
-                this._setError('Veli oturumu gecersiz veya suresi dolmus.', error || data);
-                return false;
-            }
-            this.parentSessionToken = parentSessionToken;
-            this.parentSessionExpiresAt = data.session_expires_at || this.parentSessionExpiresAt || null;
-            this._applyViewPayload(data);
-            this._applySyncMeta(data, 'parent-session');
-            this._clearError();
-            return true;
-        } catch (error) {
-            console.error('Parent session sync exception:', error);
-            this._setError('Veli verileri senkronize edilemedi.', error);
-            return false;
-        }
-    },
-
     async syncParent(parentToken = this.parentToken) {
         if (!parentToken) {
             this._setError('Veli baglantisi eksik.');
@@ -748,25 +618,6 @@ const ClassLogData = {
         if (className === this.currentClass) this.parentToken = data.parent_token;
         this._clearError();
         return data.parent_token;
-    },
-
-    async ensureParentLink(className = this.currentClass, forceRefresh = false) {
-        if (!forceRefresh && this.parentLinkCache[className]) {
-            return this.parentLinkCache[className];
-        }
-        const { data, error } = await _supabase.rpc('cl_get_parent_link_v2', {
-            p_token: ClassLogAuth.getSessionToken(),
-            p_class_name: className,
-            p_rotate: !!forceRefresh
-        });
-        if (error || !data?.ok || !data.link_code) {
-            console.error('ensureParentLink error:', error || data);
-            this._setError('Veli linki olusturulamadi.', error || data);
-            return null;
-        }
-        this.parentLinkCache[className] = data.link_code;
-        this._clearError();
-        return data.link_code;
     },
 
     _clean(recs) {
@@ -858,10 +709,16 @@ const ClassLogData = {
     },
 
     async _notifyParents(cls = this.currentClass) {
-        await _broadcastRefresh(CLASSLOG_PARENT_GLOBAL_CHANNEL, { clientId: CLASSLOG_CLIENT_ID, className: cls });
+        const token = await this.ensureParentToken(cls);
+        if (!token) return false;
+        await Promise.all([
+            _broadcastRefresh(_parentSyncChannelName(token), { clientId: CLASSLOG_CLIENT_ID, className: cls }),
+            _broadcastRefresh(CLASSLOG_PARENT_GLOBAL_CHANNEL, { clientId: CLASSLOG_CLIENT_ID, className: cls })
+        ]);
         _emitLocalRealtime(CLASSLOG_LOCAL_PARENT_EVENT, {
             clientId: CLASSLOG_CLIENT_ID,
             className: cls,
+            parentToken: token,
             subjectId: this.currentSubject
         });
         return true;
@@ -908,7 +765,7 @@ const ClassLogData = {
 
     async saveSettings() {
         const payload = {
-            subjects: _sanitizeSubjectList(SUBJECTS),
+            subjects: SUBJECTS,
             termString: this.termString || '',
             activeTermId: this.activeTermId || null,
             terms: this.terms || []
@@ -939,22 +796,22 @@ const ClassLogData = {
 
     formatDateLong(dateStr) {
         const [, month, day] = dateStr.split('-');
-        const months = ['Oca', 'Sub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Agu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+        const months = ['Oca','Sub','Mar','Nis','May','Haz','Tem','Agu','Eyl','Eki','Kas','Ara'];
         return `${parseInt(day, 10)} ${months[parseInt(month, 10) - 1]}`;
     },
 
     getStatusMeta(status) {
         const metas = {
-            '1': { label: '+', class: 'pos', text: 'Tamam' },
+            '1':  { label: '+', class: 'pos', text: 'Tamam' },
             '-1': { label: '−', class: 'neg', text: 'Eksik' },
-            '0': { label: '●', class: 'neutral', text: 'Kitap Yok' },
-            '2': { label: '●', class: 'half', text: 'Yarım' },
-            '3': { label: '●', class: 'absent', text: 'Gelmedi' }
+            '0':  { label: '●', class: 'neutral', text: 'Kitap Yok' },
+            '2':  { label: '●', class: 'half', text: 'Yarım' },
+            '3':  { label: '●', class: 'absent', text: 'Gelmedi' }
         };
         return metas[String(status)] || { label: '', class: '', text: '' };
     },
 
-    updateStatusDot() { },
+    updateStatusDot() {},
 
     getAcademicTermHeader() {
         if (this.termString) return this.termString;
@@ -965,14 +822,14 @@ const ClassLogData = {
         let t;
         if (m >= 9) {
             ac = `${y}-${y + 1}`;
-            t = '1. Dönem';
+            t = '1. Donem';
         } else if (m === 1) {
             ac = `${y - 1}-${y}`;
-            t = '1. Dönem';
+            t = '1. Donem';
         } else {
             ac = `${y - 1}-${y}`;
-            t = '2. Dönem';
+            t = '2. Donem';
         }
-        return `${ac} Eğitim Öğretim Yılı ${t}`;
+        return `${ac} Egitim Ogretim Yili ${t}`;
     }
 };
