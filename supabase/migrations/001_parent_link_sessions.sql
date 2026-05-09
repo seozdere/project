@@ -146,7 +146,7 @@ $$;
 
 create or replace function public.cl_parent_exchange_link(
     p_link_code text,
-    p_ttl_minutes integer default 10
+    p_ttl_minutes integer default 30
 )
 returns jsonb
 language plpgsql
@@ -190,7 +190,7 @@ begin
         return jsonb_build_object('ok', false, 'reason', 'invalid_or_revoked');
     end if;
 
-    v_ttl := make_interval(mins => greatest(1, least(coalesce(p_ttl_minutes, 10), 60)));
+    v_ttl := make_interval(mins => greatest(1, least(coalesce(p_ttl_minutes, 30), 60)));
     v_session_token := public.cl_random_url_token('clps');
 
     insert into public.cl_parent_sessions (
@@ -314,3 +314,6 @@ grant execute on function public.cl_get_parent_link_v2(text, text, boolean) to a
 grant execute on function public.cl_parent_exchange_link(text, integer) to anon;
 grant execute on function public.cl_get_parent_view_v2(text, text) to anon;
 grant execute on function public.cl_revoke_parent_links_v2(text, text) to anon;
+
+revoke execute on function public.cl_token_hash(text) from public, anon, authenticated;
+revoke execute on function public.cl_random_url_token(text) from public, anon, authenticated;

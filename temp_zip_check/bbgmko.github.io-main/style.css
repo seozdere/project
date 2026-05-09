@@ -6,80 +6,6 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-@keyframes slideInDown {
-    from { transform: translateY(-20px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-}
-
-@keyframes noticeSwing {
-    0%, 100% { transform: rotate(0deg); }
-    25% { transform: rotate(10deg); }
-    75% { transform: rotate(-10deg); }
-}
-
-@keyframes noticePulse {
-    0%, 100% { transform: scale(1); filter: brightness(1); }
-    50% { transform: scale(1.04); filter: brightness(1.15); } /* Daha belirgin pulse */
-}
-
-@keyframes noticeWave {
-    0% { transform: scale(0.6); opacity: 0.9; }
-    100% { transform: scale(2.8); opacity: 0; }
-}
-
-.soft-notice-bar {
-    display: none;
-    margin: 18px 16px 20px 16px; /* Marjinler de hafif daraltıldı */
-    padding: 12px 22px;
-    border-radius: 18px; /* 22px -> 18px: Daha kompakt köşe */
-    background: #FFEDD5;
-    border: 1.5px solid #F97316;
-    color: #9A3412;
-    font-size: 0.92rem; /* 1rem -> 0.92rem */
-    font-weight: 700;
-    box-shadow: 0 12px 35px rgba(249, 115, 22, 0.12);
-    align-items: center;
-    gap: 24px; /* 32px -> 24px */
-    animation: slideInDown 0.7s cubic-bezier(0.16, 1, 0.3, 1);
-    position: relative;
-    overflow: visible; /* Dalgaların görünmesi için */
-}
-
-.notice-icon-wrap {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    z-index: 5;
-}
-
-.notice-icon-anim {
-    font-size: 1.3rem; /* 1.5rem -> 1.3rem */
-    z-index: 10;
-    animation: noticeSwing 1.5s ease-in-out infinite;
-}
-
-/* Hoparlör Ses Dalgaları */
-.notice-icon-wrap::after, .notice-icon-wrap::before {
-    content: "";
-    position: absolute;
-    width: 25px;
-    height: 25px;
-    border-radius: 50%;
-    background: rgba(249, 115, 22, 0.5);
-    animation: noticeWave 2s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
-}
-.notice-icon-wrap::before { animation-delay: 1s; }
-
-.notice-text-anim {
-    display: inline-block;
-    animation: noticePulse 8s ease-in-out infinite; /* 5s -> 8s daha da yavaşlatıldı */
-    line-height: 1.5;
-    letter-spacing: 0.2px;
-}
-
 :root {
     --a-bg:        #060A14;
     --a-surface:   #0D1525;
@@ -114,9 +40,6 @@
     --radius-lg:   22px;
     --radius-xl:   30px;
     --shadow-card: 0 4px 24px rgba(0,0,0,0.4);
-    --font-display: "Trebuchet MS", "Segoe UI Semibold", sans-serif;
-    --font-body: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-    --font-parent: "Candara", "Segoe UI", sans-serif;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -143,6 +66,32 @@ body.admin-page {
     gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
 }
 .admin-topbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.action-group,
+.session-action-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 8px 10px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.035);
+    border: 1px solid rgba(255,255,255,0.06);
+}
+.context-group {
+    background: rgba(129,140,248,0.08);
+    border-color: rgba(129,140,248,0.18);
+}
+.quick-action-group {
+    background: rgba(56,189,248,0.05);
+    border-color: rgba(56,189,248,0.12);
+}
+.admin-action-group {
+    background: rgba(251,146,60,0.06);
+    border-color: rgba(251,146,60,0.16);
+}
+.session-action-group {
+    justify-content: flex-end;
+}
 
 .admin-page .subtitle { font-size: 0.82rem; color: var(--a-muted2); margin-top: 4px; margin-bottom: 16px; }
 
@@ -246,8 +195,53 @@ body.admin-page {
 .tbtn:hover { color: var(--a-text); border-color: var(--a-border); background: rgba(255,255,255,0.07); }
 .tbtn-accent { color: var(--a-accent); border-color: rgba(129,140,248,0.35); }
 .tbtn-accent:hover { background: rgba(129,140,248,0.12); color: var(--a-accent); }
-.tbtn-ghost  { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.15); font-size: 0.75rem; box-shadow: inset 0 1px 0 rgba(255,255,255,0.05); }
-.tbtn-ghost:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.25); color: #fff; }
+.tbtn-ghost  { background: transparent; border-color: transparent; font-size: 0.75rem; }
+#changePwBtn {
+    background: rgba(59,130,246,0.14);
+    border-color: rgba(96,165,250,0.42);
+    color: #dbeafe;
+    box-shadow: 0 6px 16px rgba(59,130,246,0.14);
+}
+#changePwBtn:hover {
+    background: rgba(59,130,246,0.22);
+    border-color: rgba(147,197,253,0.58);
+    color: #eff6ff;
+}
+#logoutBtn {
+    background: rgba(239,68,68,0.14);
+    border-color: rgba(248,113,113,0.44);
+    color: #fee2e2;
+    box-shadow: 0 6px 16px rgba(239,68,68,0.14);
+}
+#logoutBtn:hover {
+    background: rgba(239,68,68,0.22);
+    border-color: rgba(252,165,165,0.58);
+    color: #fff1f2;
+}
+#viewToggle,
+#kioskParentBtn {
+    background: rgba(16,185,129,0.16);
+    border-color: rgba(52,211,153,0.46);
+    color: #d1fae5;
+    box-shadow: 0 6px 16px rgba(16,185,129,0.14);
+}
+#viewToggle:hover,
+#kioskParentBtn:hover {
+    background: rgba(16,185,129,0.24);
+    border-color: rgba(110,231,183,0.62);
+    color: #ecfdf5;
+}
+#pushToBoardBtn {
+    background: rgba(16,185,129,0.16);
+    border-color: rgba(52,211,153,0.46);
+    color: #d1fae5;
+    box-shadow: 0 6px 16px rgba(16,185,129,0.14);
+}
+#pushToBoardBtn:hover {
+    background: rgba(16,185,129,0.24);
+    border-color: rgba(110,231,183,0.62);
+    color: #ecfdf5;
+}
 
 .date-selector {
     display: inline-flex; align-items: center; gap: 4px;
@@ -265,6 +259,19 @@ body.admin-page {
     border-radius: 6px; transition: var(--transition); line-height: 1;
 }
 .date-nav-btn:hover { color: var(--a-text); background: var(--a-surface2); }
+
+@media (max-width: 860px) {
+    .admin-topbar {
+        align-items: stretch;
+    }
+    .admin-topbar-left,
+    .session-action-group {
+        width: 100%;
+    }
+    .session-action-group {
+        justify-content: flex-start;
+    }
+}
 
 /* ── Student Cards ───────────────────────────────────────────────────────────── */
 .student-list { display: flex; flex-direction: column; gap: 8px; }
@@ -442,9 +449,9 @@ body.parent-page { font-family: 'Plus Jakarta Sans', sans-serif; background: var
 .excel-grid-wrapper thead th { position: sticky; top: 0; background: #F0F4FF; border-bottom: 2px solid #CBD5E1; border-right: 1px solid var(--p-border); padding: 0; z-index: 20; font-weight: 700; font-size: 0.78rem; color: var(--p-muted); }
 .date-header { writing-mode: vertical-rl; transform: rotate(180deg); padding: 12px 8px !important; text-align: center; min-width: 42px; max-width: 42px; transition: background 0.15s; }
 .date-header:hover { background: #E0E7FF !important; }
-.student-header { writing-mode: horizontal-tb !important; transform: none !important; text-align: left; padding: 14px 20px !important; font-size: 0.88rem !important; font-weight: 800; color: #1E293B !important; letter-spacing: 1px; text-transform: uppercase; min-width: 220px; max-width: 220px; background: #F0F4FF !important; border-right: 2px solid #CBD5E1 !important; }
+.student-header { writing-mode: horizontal-tb !important; transform: none !important; text-align: left; padding: 14px 18px !important; font-size: 0.8rem !important; font-weight: 700; color: var(--p-accent) !important; letter-spacing: 0.8px; text-transform: uppercase; min-width: 200px; background: #EEF2FF !important; border-right: 2px solid #CBD5E1 !important; }
 
-.sticky-col { position: sticky; left: 0; z-index: 30; background: white; border-right: 2px solid #CBD5E1 !important; min-width: 220px; max-width: 220px; }
+.sticky-col { position: sticky; left: 0; z-index: 30; background: white; border-right: 2px solid #CBD5E1 !important; min-width: 190px; max-width: 240px; }
 .sticky-header.sticky-col { z-index: 40 !important; }
 
 /* ── FIX: Hover sadece isim sütununda, renkli hücreler korunur ──────────────── */
@@ -457,7 +464,6 @@ body.parent-page { font-family: 'Plus Jakarta Sans', sans-serif; background: var
 /* Renkli hücreler hover'da biraz koyulaşır, gri olmaz */
 .excel-grid-wrapper tbody tr:hover td.cell-pos     { background: #86efac !important; }
 .excel-grid-wrapper tbody tr:hover td.cell-neg     { background: #f87171 !important; }
-.excel-grid-wrapper tbody tr:hover td.cell-neg .hw-text-mark { color: white !important; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
 .excel-grid-wrapper tbody tr:hover td.cell-half    { background: #fde047 !important; }
 .excel-grid-wrapper tbody tr:hover td.cell-neutral { background: #f3e8ff !important; }
 .excel-grid-wrapper tbody tr:hover td.cell-absent  { background: #e5e7eb !important; }
@@ -466,7 +472,7 @@ body.parent-page { font-family: 'Plus Jakarta Sans', sans-serif; background: var
 .excel-grid-wrapper tbody tr:nth-child(even) td { background: var(--p-row-alt); }
 .excel-grid-wrapper tbody tr:nth-child(even) td.sticky-col { background: var(--p-row-alt); }
 
-.student-name { padding: 10px 18px !important; text-align: left !important; font-size: 0.96rem; font-weight: 600; color: var(--p-text); display: flex !important; align-items: center; gap: 8px; }
+.student-name { padding: 10px 18px !important; text-align: left !important; font-size: 0.88rem; font-weight: 600; color: var(--p-text); display: flex !important; align-items: center; gap: 8px; }
 
 /* ── FIX: Daha koyu yeşil / kırmızı hücre renkleri ─────────────────────────── */
 .status-dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; }
@@ -554,21 +560,6 @@ body.parent-page { font-family: 'Plus Jakarta Sans', sans-serif; background: var
 .leader-bar-wrap { width: 80px; height: 8px; background: #EEF2FF; border-radius: 4px; overflow: hidden; flex-shrink: 0; }
 .leader-bar   { height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
 .leader-score { font-size: 0.82rem; font-weight: 700; color: var(--p-muted); white-space: nowrap; flex-shrink: 0; min-width: 52px; text-align: right; }
-.leader-more-btn {
-    width: 100%;
-    margin-top: 12px;
-    padding: 10px 14px;
-    border: 1px solid #CBD5E1;
-    border-radius: 10px;
-    background: #F8FAFC;
-    color: var(--p-accent);
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 0.82rem;
-    font-weight: 800;
-    cursor: pointer;
-    transition: var(--transition);
-}
-.leader-more-btn:hover { background: #EEF2FF; border-color: #A5B4FC; }
 
 /* ── Footer ──────────────────────────────────────────────────────────────── */
 .excel-footer {
@@ -768,50 +759,4 @@ table { color: var(--p-text); }
     width: 100%;
     height: 100%;
     line-height: 1;
-}
-
-/* RESTORE: Eski deploy'daki parent tablo oranlari. */
-.excel-grid-wrapper table {
-    width: auto !important;
-    min-width: 100%;
-    table-layout: auto !important;
-}
-
-.sticky-col {
-    min-width: 0 !important;
-    max-width: none !important;
-    width: auto !important;
-    white-space: nowrap;
-}
-
-.student-header {
-    min-width: 0 !important;
-    max-width: none !important;
-    width: auto !important;
-}
-
-.student-name {
-    width: auto !important;
-    min-width: 0 !important;
-    max-width: none !important;
-    white-space: nowrap !important;
-    font-size: 0.88rem !important;
-}
-
-.student-name strong {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.date-header {
-    min-width: 28px !important;
-    max-width: 42px !important;
-    width: auto !important;
-}
-
-.class-date-header {
-    min-width: 32px !important;
-    max-width: 56px !important;
-    width: auto !important;
 }

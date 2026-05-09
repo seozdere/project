@@ -1,7 +1,7 @@
 // Shared data layer for ClassLog Pro
 
-const SUPABASE_URL = "https://bpkneixqzcpvaoytgcso.supabase.co";
-const SUPABASE_KEY = "sb_publishable_6BlMzOjGZWl7FG4Rddn5BA_X9A1wbLJ";
+const SUPABASE_URL = "https://hshpppvwuuklewinvjeu.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhzaHBwcHZ3dXVrbGV3aW52amV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODE1NTcsImV4cCI6MjA5MTc1NzU1N30.gW2UC46GwVUfDMnxceAP_vslXsNRnAuQMqcofhwqsmA";
 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const CLASSLOG_CLIENT_ID = (() => {
@@ -16,31 +16,28 @@ const CLASSLOG_CLIENT_ID = (() => {
     }
 })();
 if (typeof window !== 'undefined') window.CLASSLOG_CLIENT_ID = CLASSLOG_CLIENT_ID;
-const CLASSLOG_SECURITY = Object.freeze({
-    secureBoardPairingEnabled: false,
-    parentHtmlDownloadEnabled: false,
-    rotateParentLinksOnShare: true
-});
-if (typeof window !== 'undefined') window.CLASSLOG_SECURITY = CLASSLOG_SECURITY;
+const CLASSLOG_RUNTIME_ID = `rt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+if (typeof window !== 'undefined') window.CLASSLOG_RUNTIME_ID = CLASSLOG_RUNTIME_ID;
 
 const SCHOOL_NAME = "Büyükşehir Belediyesi Gazi Mustafa Kemal Ortaokulu";
 const SCHOOL_SHORT = "BBGMKO";
 
-const SUBJECTS = _sanitizeSubjectList([
-    { id: 'turkce', label: 'Türkçe', emoji: '📖', color: '#6366F1', showInParent: true },
-    { id: 'mat', label: 'Matematik', emoji: '📐', color: '#0EA5E9', showInParent: true },
-    { id: 'fen', label: 'Fen Bilimleri', emoji: '🔬', color: '#10B981', showInParent: true },
-    { id: 'sosyal', label: 'Sosyal Bilgiler', emoji: '🌍', color: '#F59E0B', showInParent: true },
-]);
+const SUBJECTS = [
+    { id: 'turkce', label: 'Türkçe',          emoji: '📖', color: '#6366F1', showInParent: true  },
+    { id: 'mat',    label: 'Matematik',       emoji: '📐', color: '#0EA5E9', showInParent: true  },
+    { id: 'fen',    label: 'Fen Bilimleri',   emoji: '🔬', color: '#10B981', showInParent: true  },
+    { id: 'sosyal', label: 'Sosyal Bilgiler', emoji: '🌍', color: '#F59E0B', showInParent: true  },
+];
 
 const CLASSLOG_PARENT_GLOBAL_CHANNEL = 'classlog_parent_global_v33';
 const CLASSLOG_TEACHER_GLOBAL_CHANNEL = 'classlog_teacher_global_v33';
 const CLASSLOG_LOCAL_PARENT_EVENT = 'classlog_parent_refresh_local_v34';
 const CLASSLOG_LOCAL_TEACHER_EVENT = 'classlog_teacher_refresh_local_v34';
+const CLASSLOG_PARENT_TOKEN_CACHE_KEY = 'classlog_parent_tokens_v1';
 
 // Sabit tahta kanalı — QR kodu hiç değişmez
 const CLASSLOG_BOARD_FIXED_ID = 'CLASSLOG_BOARD_BBGMKO_V1';
-const CLASSLOG_BOARD_CHANNEL = 'board_auth_' + CLASSLOG_BOARD_FIXED_ID;
+const CLASSLOG_BOARD_CHANNEL  = 'board_auth_' + CLASSLOG_BOARD_FIXED_ID;
 
 function _htmlEncode(str) {
     return String(str)
@@ -50,76 +47,6 @@ function _htmlEncode(str) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 }
-
-function _normalizeWhitespace(value) {
-    return String(value || '').replace(/\s+/g, ' ').trim();
-}
-
-function _slugifySubjectId(value) {
-    const normalized = _normalizeWhitespace(value)
-        .toLocaleLowerCase('tr-TR')
-        .normalize('NFKD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '');
-    return normalized.slice(0, 24);
-}
-
-function _sanitizeHexColor(value, fallback = '#6366F1') {
-    const normalized = String(value || '').trim();
-    return /^#[0-9a-fA-F]{6}$/.test(normalized) ? normalized.toUpperCase() : fallback;
-}
-
-function _sanitizeSubjectLabel(value, fallback = 'Ders') {
-    const normalized = _normalizeWhitespace(value)
-        .replace(/[<>`"'\\]/g, '')
-        .replace(/[\u0000-\u001F\u007F]/g, '');
-    return normalized.slice(0, 40) || fallback;
-}
-
-function _sanitizeSubjectEmoji(value, fallback = 'Ders') {
-    const normalized = _normalizeWhitespace(value)
-        .replace(/[<>`"'\\]/g, '')
-        .replace(/[\u0000-\u001F\u007F]/g, '');
-    return normalized.slice(0, 8) || fallback;
-}
-
-function _sanitizeSubjectDefinition(subject, index = 0) {
-    const label = _sanitizeSubjectLabel(subject?.label, `Ders ${index + 1}`);
-    const fallbackId = index === 0 ? 'turkce' : `subject${index + 1}`;
-    const id = _slugifySubjectId(subject?.id || label) || fallbackId;
-    return {
-        id,
-        label,
-        emoji: _sanitizeSubjectEmoji(subject?.emoji, 'Ders'),
-        color: _sanitizeHexColor(subject?.color, '#6366F1'),
-        showInParent: subject?.showInParent !== false
-    };
-}
-
-function _sanitizeSubjectList(subjects) {
-    const next = [];
-    const seen = new Set();
-    for (const [index, subject] of (Array.isArray(subjects) ? subjects : []).entries()) {
-        const clean = _sanitizeSubjectDefinition(subject, index);
-        if (seen.has(clean.id)) continue;
-        seen.add(clean.id);
-        next.push(clean);
-    }
-    if (!next.length) {
-        return [
-            { id: 'turkce', label: 'Turkce', emoji: 'TR', color: '#6366F1', showInParent: true },
-            { id: 'mat', label: 'Matematik', emoji: 'MT', color: '#0EA5E9', showInParent: true },
-            { id: 'fen', label: 'Fen Bilimleri', emoji: 'FN', color: '#10B981', showInParent: true },
-            { id: 'sosyal', label: 'Sosyal Bilgiler', emoji: 'SB', color: '#F59E0B', showInParent: true }
-        ];
-    }
-    return next.map(subject => {
-        if (subject.id === 'turkce') subject.showInParent = true;
-        if (subject.label === 'Fen Bilgisi') subject.label = 'Fen Bilimleri';
-        return subject;
-    });
-}
-if (typeof window !== 'undefined') window.ClassLogSanitizeSubjectDefinition = _sanitizeSubjectDefinition;
 
 function _safeChannelId(value) {
     return encodeURIComponent(String(value)).replace(/%/g, '_');
@@ -136,10 +63,61 @@ function _parentSyncChannelName(token) {
 const _channelCache = new Map();
 const _browserChannelCache = new Map();
 
+function _readParentTokenCache() {
+    try {
+        return JSON.parse(localStorage.getItem(CLASSLOG_PARENT_TOKEN_CACHE_KEY) || '{}');
+    } catch (error) {
+        return {};
+    }
+}
+
+function _writeParentTokenCache(cache) {
+    try {
+        localStorage.setItem(CLASSLOG_PARENT_TOKEN_CACHE_KEY, JSON.stringify(cache || {}));
+    } catch (error) {}
+}
+
+function _clearParentTokenCache() {
+    try {
+        localStorage.removeItem(CLASSLOG_PARENT_TOKEN_CACHE_KEY);
+    } catch (error) {}
+}
+
+function _connectRealtimeSocket() {
+    try {
+        _supabase?.realtime?.connect?.();
+    } catch (error) {
+        // Socket zaten acik olabilir; sessiz gec.
+    }
+}
+
+async function _restartRealtimeSocket() {
+    try {
+        _supabase?.realtime?.disconnect?.();
+    } catch (error) {
+        // Baglanti zaten kopuk olabilir.
+    }
+    await new Promise(resolve => setTimeout(resolve, 120));
+    _connectRealtimeSocket();
+    await new Promise(resolve => setTimeout(resolve, 120));
+}
+
+async function _disposeBroadcastChannel(name, channelOverride = null) {
+    const cached = _channelCache.get(name);
+    _channelCache.delete(name);
+    const channel = channelOverride || cached?.channel || null;
+    if (!channel) return;
+    try {
+        await _supabase.removeChannel(channel);
+    } catch (error) {
+        // Kanal zaten kapanmis olabilir.
+    }
+}
+
 function _cloneData(value) {
     if (value === null || value === undefined) return value;
     if (typeof structuredClone === 'function') {
-        try { return structuredClone(value); } catch (error) { }
+        try { return structuredClone(value); } catch (error) {}
     }
     return JSON.parse(JSON.stringify(value));
 }
@@ -199,16 +177,16 @@ function _emitLocalRealtime(name, payload = {}) {
     try {
         localStorage.setItem(name, JSON.stringify(eventPayload));
         localStorage.removeItem(name);
-    } catch (error) { }
+    } catch (error) {}
 
     try {
         const channel = _getBrowserChannel(name);
         if (channel) channel.postMessage(eventPayload);
-    } catch (error) { }
+    } catch (error) {}
 }
 
 function _listenLocalRealtime(name, handler) {
-    if (typeof window === 'undefined') return () => { };
+    if (typeof window === 'undefined') return () => {};
 
     const onStorage = event => {
         if (event.key !== name || !event.newValue) return;
@@ -232,7 +210,10 @@ function _listenLocalRealtime(name, handler) {
 }
 
 async function _getBroadcastChannel(name) {
-    if (_channelCache.has(name)) return _channelCache.get(name);
+    const cached = _channelCache.get(name);
+    if (cached?.promise) return cached.promise;
+
+    _connectRealtimeSocket();
 
     const channel = _supabase.channel(name);
     const ready = new Promise((resolve, reject) => {
@@ -240,6 +221,7 @@ async function _getBroadcastChannel(name) {
         const timeout = setTimeout(() => {
             if (!settled) {
                 settled = true;
+                void _disposeBroadcastChannel(name, channel);
                 reject(new Error(`Broadcast subscribe timeout: ${name}`));
             }
         }, 8000);
@@ -254,23 +236,49 @@ async function _getBroadcastChannel(name) {
             if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
                 settled = true;
                 clearTimeout(timeout);
+                void _disposeBroadcastChannel(name, channel);
                 reject(new Error(`Broadcast subscribe failed: ${name} (${status})`));
             }
         });
     });
 
-    _channelCache.set(name, ready);
+    _channelCache.set(name, { channel, promise: ready });
     return ready;
+}
+
+async function _sendBroadcastEvent(name, eventName, payload = {}, attempts = 3) {
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+            if (attempt > 1) {
+                await _disposeBroadcastChannel(name);
+                await _restartRealtimeSocket();
+            }
+
+            const channel = await _getBroadcastChannel(name);
+            await channel.send({
+                type: 'broadcast',
+                event: eventName,
+                payload: { ts: Date.now(), ...payload }
+            });
+            return true;
+        } catch (error) {
+            lastError = error;
+            console.error(`Broadcast send attempt ${attempt} failed:`, name, error);
+            await _disposeBroadcastChannel(name);
+            if (attempt < attempts) {
+                await new Promise(resolve => setTimeout(resolve, 450 * attempt));
+            }
+        }
+    }
+
+    throw lastError || new Error(`Broadcast send failed: ${name}`);
 }
 
 async function _broadcastRefresh(name, payload = {}) {
     try {
-        const channel = await _getBroadcastChannel(name);
-        await channel.send({
-            type: 'broadcast',
-            event: 'refresh',
-            payload: { ts: Date.now(), ...payload }
-        });
+        await _sendBroadcastEvent(name, 'refresh', payload, 3);
         return true;
     } catch (error) {
         console.error('Broadcast error:', name, error);
@@ -304,7 +312,7 @@ const ClassLogAuth = {
         const token = this.getSessionToken();
         if (token) {
             try {
-                _supabase.rpc('cl_logout', { p_token: token }).catch(() => { });
+                _supabase.rpc('cl_logout', { p_token: token }).catch(() => {});
             } catch (error) {
                 console.error('Logout error:', error);
             }
@@ -315,7 +323,13 @@ const ClassLogAuth = {
         sessionStorage.removeItem('cl_kiosk');
         sessionStorage.removeItem('cl_kiosk_expires_at');
         sessionStorage.removeItem('cl_kiosk_context');
+        sessionStorage.removeItem('cl_kiosk_parent_token');
+        sessionStorage.removeItem('cl_board_presence_token');
         sessionStorage.removeItem('cl_board_target_code');
+        localStorage.removeItem('cl_last_board_code');
+        _clearParentTokenCache();
+        ClassLogData.parentToken = null;
+        ClassLogData.parentTokenCache = {};
     },
 
     getSessionToken() {
@@ -452,11 +466,7 @@ const ClassLogData = {
     viewingTermId: null,
     terms: [],
     parentToken: null,
-    parentLinkCode: null,
-    parentSessionToken: null,
-    parentSessionExpiresAt: null,
-    parentTokenCache: {},
-    parentLinkCache: {},
+    parentTokenCache: _readParentTokenCache(),
     syncMeta: {
         source: 'idle',
         lastSyncAt: null,
@@ -466,10 +476,10 @@ const ClassLogData = {
     },
     lastError: null,
     availableClasses: [
-        '5A', '5B', '5C', '5D', '5E', '5F', '5G', '5H', '5I', '5İ', '5J',
-        '6A', '6B', '6C', '6D', '6E', '6F', '6G', '6H', '6I', '6İ', '6J',
-        '7A', '7B', '7C', '7D', '7E', '7F', '7G', '7H', '7I', '7İ', '7J',
-        '8A', '8B', '8C', '8D', '8E', '8F', '8G', '8H', '8I', '8İ', '8J'
+        '5A','5B','5C','5D','5E','5F','5G','5H','5I','5İ','5J',
+        '6A','6B','6C','6D','6E','6F','6G','6H','6I','6İ','6J',
+        '7A','7B','7C','7D','7E','7F','7G','7H','7I','7İ','7J',
+        '8A','8B','8C','8D','8E','8F','8G','8H','8I','8İ','8J'
     ],
 
     _allowedHomeworkStatuses: new Set([1, -1, 0, 2, 3]),
@@ -525,7 +535,14 @@ const ClassLogData = {
         if (!settings || typeof settings !== 'object') return;
 
         if (Array.isArray(settings.subjects)) {
-            SUBJECTS.splice(0, SUBJECTS.length, ..._sanitizeSubjectList(settings.subjects));
+            SUBJECTS.splice(0, SUBJECTS.length, ...settings.subjects);
+            SUBJECTS.forEach(subject => {
+                if (subject.showInParent === undefined || subject.showInParent === null) {
+                    subject.showInParent = true;
+                }
+                if (subject.id === 'turkce') subject.showInParent = true;
+                if (subject.label === 'Fen Bilgisi') subject.label = 'Fen Bilimleri';
+            });
         }
 
         this.termString = settings.termString || null;
@@ -587,6 +604,30 @@ const ClassLogData = {
         };
     },
 
+    _pruneViewDataToStudents(studentList, dataMap, kind) {
+        const allowed = new Set(this._sanitizeStudents(studentList));
+        const source = this._sanitizeStatusMap(dataMap || {}, kind);
+        const out = {};
+        for (const [date, row] of Object.entries(source)) {
+            const nextRow = {};
+            for (const [student, value] of Object.entries(row || {})) {
+                if (allowed.has(student)) nextRow[student] = value;
+            }
+            if (Object.keys(nextRow).length) out[date] = nextRow;
+        }
+        return out;
+    },
+
+    _pruneNotesToStudents(studentList, notes) {
+        const allowed = new Set(this._sanitizeStudents(studentList));
+        const source = this._sanitizeNotes(notes || {});
+        const out = {};
+        for (const [student, note] of Object.entries(source)) {
+            if (allowed.has(student)) out[student] = note;
+        }
+        return out;
+    },
+
     _applySyncMeta(payload, source) {
         this.syncMeta = {
             source: source || 'unknown',
@@ -599,11 +640,10 @@ const ClassLogData = {
 
     _applyViewPayload(payload) {
         this.students = this._sanitizeStudents(payload?.students || []);
-        this.notes = this._sanitizeNotes(payload?.notes || {});
-        this.records = this._sanitizeStatusMap(payload?.records || {}, 'homework');
-        this.classRecords = this._sanitizeStatusMap(payload?.classRecords || {}, 'class');
+        this.notes = this._pruneNotesToStudents(this.students, payload?.notes || {});
+        this.records = this._pruneViewDataToStudents(this.students, payload?.records || {}, 'homework');
+        this.classRecords = this._pruneViewDataToStudents(this.students, payload?.classRecords || {}, 'class');
         this.parentNotice = this._normalizeParentNotice(payload?.parent_notice || payload?.parentNotice || null);
-        this.parentPopup = this._normalizeParentNotice(payload?.parent_popup || payload?.parentPopup || null);
         if (payload?.class_name) this.currentClass = payload.class_name;
         if (payload?.settings) this._applySettings(payload.settings);
     },
@@ -685,67 +725,9 @@ const ClassLogData = {
         }
     },
 
-    async exchangeParentLink(parentLinkCode = this.parentLinkCode) {
-        if (!parentLinkCode) {
-            this._setError('Veli bağlantısı eksik.');
-            return null;
-        }
-        try {
-            const { data, error } = await _supabase.rpc('cl_parent_exchange_link', {
-                p_link_code: parentLinkCode,
-                p_ttl_minutes: 30
-            });
-            if (error || !data?.ok || !data.session_token) {
-                console.error('Parent link exchange error:', error || data);
-                this._setError('Veli oturumu başlatılamadı.', error || data);
-                return null;
-            }
-            this.parentLinkCode = parentLinkCode;
-            this.parentSessionToken = data.session_token;
-            this.parentSessionExpiresAt = data.expires_at || null;
-            this._clearError();
-            return {
-                sessionToken: data.session_token,
-                expiresAt: data.expires_at || null
-            };
-        } catch (error) {
-            console.error('Parent link exchange exception:', error);
-            this._setError('Veli oturumu başlatılamadı.', error);
-            return null;
-        }
-    },
-
-    async syncParentSession(parentSessionToken = this.parentSessionToken) {
-        if (!parentSessionToken) {
-            this._setError('Veli oturumu eksik.');
-            return false;
-        }
-        try {
-            const { data, error } = await _supabase.rpc('cl_get_parent_view_v2', {
-                p_session_token: parentSessionToken,
-                p_subject_id: this.currentSubject
-            });
-            if (error || !data?.ok) {
-                console.error('Parent session sync error:', error || data);
-                this._setError('Veli oturumu geçersiz veya süresi dolmuş.', error || data);
-                return false;
-            }
-            this.parentSessionToken = parentSessionToken;
-            this.parentSessionExpiresAt = data.session_expires_at || this.parentSessionExpiresAt || null;
-            this._applyViewPayload(data);
-            this._applySyncMeta(data, 'parent-session');
-            this._clearError();
-            return true;
-        } catch (error) {
-            console.error('Parent session sync exception:', error);
-            this._setError('Veli verileri senkronize edilemedi.', error);
-            return false;
-        }
-    },
-
     async syncParent(parentToken = this.parentToken) {
         if (!parentToken) {
-            this._setError('Veli bağlantısı eksik.');
+            this._setError('Veli baglantisi eksik.');
             return false;
         }
         try {
@@ -755,10 +737,14 @@ const ClassLogData = {
             });
             if (error || !data?.ok) {
                 console.error('Parent sync error:', error || data);
-                this._setError('Veli verileri yüklenemedi.', error || data);
+                this._setError('Veli verileri yuklenemedi.', error || data);
                 return false;
             }
             this.parentToken = parentToken;
+            if (data?.class_name) {
+                this.parentTokenCache[data.class_name] = parentToken;
+                _writeParentTokenCache(this.parentTokenCache);
+            }
             this._applyViewPayload(data);
             await this._loadParentNoticeByToken(parentToken);
             this._applySyncMeta(data, 'parent');
@@ -771,40 +757,9 @@ const ClassLogData = {
         }
     },
 
-    async saveParentNotice(notice) {
-        if (!ClassLogAuth.isAdmin()) return false;
-        try {
-            const { data, error } = await _supabase.rpc('cl_save_parent_notice', {
-                p_token: ClassLogAuth.getSessionToken(),
-                p_class_name: notice.className || this.currentClass,
-                p_notice: {
-                    text: notice.text || '',
-                    expires_at: notice.expiresAt || null
-                }
-            });
-            if (error) {
-                console.error('saveParentNotice error:', error);
-                this._setError('Duyuru kaydedilemedi.', error);
-                return false;
-            }
-            if (data === true) {
-                this.parentNotice = this._normalizeParentNotice({
-                    text: notice.text,
-                    expires_at: notice.expiresAt
-                });
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('saveParentNotice exception:', error);
-            this._setError('Duyuru kaydedilemedi.', error);
-            return false;
-        }
-    },
-
     async syncSettings() {
         if (!ClassLogAuth.isLoggedIn()) {
-            this._setError('Ayarlar yüklenemedi; oturum bulunamadı.');
+            this._setError('Ayarlar yuklenemedi; oturum bulunamadi.');
             return false;
         }
         try {
@@ -813,7 +768,7 @@ const ClassLogData = {
             });
             if (error || !data?.ok) {
                 console.error('syncSettings error:', error || data);
-                this._setError('Ayarlar yüklenemedi.', error || data);
+                this._setError('Ayarlar yuklenemedi.', error || data);
                 return false;
             }
             this._applySettings(data.settings || {});
@@ -840,28 +795,116 @@ const ClassLogData = {
             return null;
         }
         this.parentTokenCache[className] = data.parent_token;
+        _writeParentTokenCache(this.parentTokenCache);
         if (className === this.currentClass) this.parentToken = data.parent_token;
         this._clearError();
         return data.parent_token;
     },
 
-    async ensureParentLink(className = this.currentClass, forceRefresh = false) {
-        if (!forceRefresh && this.parentLinkCache[className]) {
-            return this.parentLinkCache[className];
+    async upsertBoardPresence({
+        boardId = CLASSLOG_BOARD_FIXED_ID,
+        boardCode,
+        clientToken,
+        state = 'waiting',
+        ttlSeconds = 45
+    } = {}) {
+        try {
+            const { data, error } = await _supabase.rpc('cl_upsert_board_presence', {
+                p_board_id: boardId,
+                p_board_code: boardCode,
+                p_client_token: clientToken,
+                p_state: state,
+                p_ttl_seconds: ttlSeconds
+            });
+            if (error || data !== true) {
+                console.error('upsertBoardPresence error:', error || data);
+                const rawMessage = String(error?.message || error?.details || error?.hint || '').toLowerCase();
+                if (rawMessage.includes('cl_upsert_board_presence') && (rawMessage.includes('could not find') || rawMessage.includes('does not exist'))) {
+                    this._setError('Supabase tahta polling guncellemesi eksik.', error);
+                }
+                return false;
+            }
+            return true;
+        } catch (error) {
+            console.error('upsertBoardPresence exception:', error);
+            return false;
         }
-        const { data, error } = await _supabase.rpc('cl_get_parent_link_v2', {
-            p_token: ClassLogAuth.getSessionToken(),
-            p_class_name: className,
-            p_rotate: !!forceRefresh
-        });
-        if (error || !data?.ok || !data.link_code) {
-            console.error('ensureParentLink error:', error || data);
-            this._setError('Veli linki oluşturulamadı.', error || data);
+    },
+
+    async pollBoardCommand({
+        clientToken,
+        lastCommandId = null
+    } = {}) {
+        try {
+            const { data, error } = await _supabase.rpc('cl_poll_board_command', {
+                p_client_token: clientToken,
+                p_last_command_id: lastCommandId
+            });
+            if (error) {
+                console.error('pollBoardCommand error:', error);
+                const rawMessage = String(error.message || error.details || error.hint || '').toLowerCase();
+                if (rawMessage.includes('cl_poll_board_command') && (rawMessage.includes('could not find') || rawMessage.includes('does not exist'))) {
+                    this._setError('Supabase tahta polling guncellemesi eksik.', error);
+                }
+                return null;
+            }
+            return data || null;
+        } catch (error) {
+            console.error('pollBoardCommand exception:', error);
             return null;
         }
-        this.parentLinkCache[className] = data.link_code;
-        this._clearError();
-        return data.link_code;
+    },
+
+    async issueBoardCommand({
+        boardId = CLASSLOG_BOARD_FIXED_ID,
+        boardCode,
+        commandType,
+        payload = {}
+    } = {}) {
+        let lastError = null;
+        for (let attempt = 1; attempt <= 4; attempt += 1) {
+            try {
+                const { data, error } = await _supabase.rpc('cl_issue_board_command', {
+                    p_token: ClassLogAuth.getSessionToken(),
+                    p_board_id: boardId,
+                    p_board_code: boardCode,
+                    p_command_type: commandType,
+                    p_payload: payload
+                });
+                if (error) {
+                    console.error('issueBoardCommand error:', error);
+                    const rawMessage = String(error.message || error.details || error.hint || '').toLowerCase();
+                    if (rawMessage.includes('cl_issue_board_command') && (rawMessage.includes('could not find') || rawMessage.includes('does not exist'))) {
+                        throw new Error('Supabase tahta polling guncellemesi eksik. `supabase_v37_board_command_polling.sql` dosyasini uygulayin.');
+                    }
+                    throw new Error(error.message || 'Tahta komutu gonderilemedi.');
+                }
+                if (!data?.ok) {
+                    if (data?.reason === 'board_not_found') {
+                        lastError = new Error('Bu kodla eslesen aktif bir tahta bulunamadi. Tahtadaki kodu yenileyip tekrar deneyin.');
+                        if (attempt < 4) {
+                            await new Promise(resolve => setTimeout(resolve, 350 * attempt));
+                            continue;
+                        }
+                        throw lastError;
+                    }
+                    if (data?.reason === 'unauthorized') {
+                        throw new Error('Oturum gecersiz. Lutfen yeniden giris yapin.');
+                    }
+                    throw new Error('Tahta komutu gonderilemedi.');
+                }
+                return data;
+            } catch (error) {
+                lastError = error;
+                if (attempt < 4) {
+                    await new Promise(resolve => setTimeout(resolve, 250 * attempt));
+                    continue;
+                }
+                console.error('issueBoardCommand exception:', error);
+                throw error;
+            }
+        }
+        throw lastError || new Error('Tahta komutu gonderilemedi.');
     },
 
     _clean(recs) {
@@ -943,6 +986,7 @@ const ClassLogData = {
     async _notifyTeacher(ids, payload = {}) {
         const eventPayload = {
             clientId: CLASSLOG_CLIENT_ID,
+            runtimeId: CLASSLOG_RUNTIME_ID,
             className: this.currentClass,
             subjectId: this.currentSubject,
             ...payload
@@ -953,10 +997,16 @@ const ClassLogData = {
     },
 
     async _notifyParents(cls = this.currentClass) {
-        await _broadcastRefresh(CLASSLOG_PARENT_GLOBAL_CHANNEL, { clientId: CLASSLOG_CLIENT_ID, className: cls });
+        const token = await this.ensureParentToken(cls);
+        if (!token) return false;
+        await Promise.all([
+            _broadcastRefresh(_parentSyncChannelName(token), { clientId: CLASSLOG_CLIENT_ID, className: cls }),
+            _broadcastRefresh(CLASSLOG_PARENT_GLOBAL_CHANNEL, { clientId: CLASSLOG_CLIENT_ID, className: cls })
+        ]);
         _emitLocalRealtime(CLASSLOG_LOCAL_PARENT_EVENT, {
             clientId: CLASSLOG_CLIENT_ID,
             className: cls,
+            parentToken: token,
             subjectId: this.currentSubject
         });
         return true;
@@ -971,12 +1021,26 @@ const ClassLogData = {
     getRecords() { return _cloneData(this.records) || {}; },
     getClassRecords() { return _cloneData(this.classRecords) || {}; },
     getNotes() { return _cloneData(this.notes) || {}; },
+    getParentNotice() { return _cloneData(this.parentNotice) || null; },
     getSyncMeta() { return _cloneData(this.syncMeta) || {}; },
 
     async saveStudents(students) {
+        const beforeRecords = JSON.stringify(this.records || {});
+        const beforeClassRecords = JSON.stringify(this.classRecords || {});
         this.students = this._sanitizeStudents(students);
+        this.notes = this._pruneNotesToStudents(this.students, this.notes);
+        this.records = this._pruneViewDataToStudents(this.students, this.records, 'homework');
+        this.classRecords = this._pruneViewDataToStudents(this.students, this.classRecords, 'class');
         const ok = await this._pushBase();
-        if (ok) await this._afterWrite([this._baseId()]);
+        if (ok) {
+            if (beforeRecords !== JSON.stringify(this.records || {})) {
+                await this._pushRecords();
+            }
+            if (beforeClassRecords !== JSON.stringify(this.classRecords || {})) {
+                await this._pushClassRecords();
+            }
+            await this._afterWrite([this._baseId(), this._dbId()]);
+        }
         return ok;
     },
 
@@ -1001,9 +1065,51 @@ const ClassLogData = {
         return ok;
     },
 
+    async saveParentNotice({ className = this.currentClass, text = '', expiresAt = null } = {}) {
+        if (!ClassLogAuth.isAdmin()) {
+            this._setError('Bu işlem yalnızca admin tarafından yapılabilir.');
+            return false;
+        }
+        const cleanText = String(text || '').trim();
+        const payload = cleanText
+            ? {
+                text: cleanText,
+                expires_at: expiresAt || null
+            }
+            : null;
+
+        try {
+            const { data, error } = await _supabase.rpc('cl_save_parent_notice', {
+                p_token: ClassLogAuth.getSessionToken(),
+                p_class_name: className,
+                p_notice: payload
+            });
+            if (error || data !== true) {
+                console.error('saveParentNotice error:', error || data);
+                const rawMessage = String(error?.message || error?.details || error?.hint || '').toLowerCase();
+                if (rawMessage.includes('cl_save_parent_notice') && (rawMessage.includes('could not find') || rawMessage.includes('does not exist'))) {
+                    this._setError('Supabase veli uyarı güncellemesi eksik. `supabase_v38_parent_notice_bar.sql` dosyasını uygulayın.', error || data);
+                } else {
+                    this._setError('Veli uyarısı kaydedilemedi.', error || data);
+                }
+                return false;
+            }
+            if (className === this.currentClass) {
+                this.parentNotice = this._normalizeParentNotice(payload);
+            }
+            this._clearError();
+            await this._afterWrite([this._baseId(className)], className, { parentNotice: true });
+            return true;
+        } catch (error) {
+            console.error('saveParentNotice exception:', error);
+            this._setError('Veli uyarısı kaydedilemedi.', error);
+            return false;
+        }
+    },
+
     async saveSettings() {
         const payload = {
-            subjects: _sanitizeSubjectList(SUBJECTS),
+            subjects: SUBJECTS,
             termString: this.termString || '',
             activeTermId: this.activeTermId || null,
             terms: this.terms || []
@@ -1014,7 +1120,7 @@ const ClassLogData = {
         });
         if (error || data !== true) {
             console.error('saveSettings error:', error || data);
-            this._setError('Sistem ayarları kaydedilemedi.', error || data);
+            this._setError('Sistem ayarlari kaydedilemedi.', error || data);
             return false;
         }
         await Promise.all([
@@ -1034,22 +1140,22 @@ const ClassLogData = {
 
     formatDateLong(dateStr) {
         const [, month, day] = dateStr.split('-');
-        const months = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+        const months = ['Oca','Sub','Mar','Nis','May','Haz','Tem','Agu','Eyl','Eki','Kas','Ara'];
         return `${parseInt(day, 10)} ${months[parseInt(month, 10) - 1]}`;
     },
 
     getStatusMeta(status) {
         const metas = {
-            '1': { label: '+', class: 'pos', text: 'Tamam' },
+            '1':  { label: '+', class: 'pos', text: 'Tamam' },
             '-1': { label: '−', class: 'neg', text: 'Eksik' },
-            '0': { label: '●', class: 'neutral', text: 'Kitap Yok' },
-            '2': { label: '●', class: 'half', text: 'Yarım' },
-            '3': { label: '●', class: 'absent', text: 'Gelmedi' }
+            '0':  { label: '●', class: 'neutral', text: 'Kitap Yok' },
+            '2':  { label: '●', class: 'half', text: 'Yarım' },
+            '3':  { label: '●', class: 'absent', text: 'Gelmedi' }
         };
         return metas[String(status)] || { label: '', class: '', text: '' };
     },
 
-    updateStatusDot() { },
+    updateStatusDot() {},
 
     getAcademicTermHeader() {
         if (this.termString) return this.termString;
@@ -1060,45 +1166,14 @@ const ClassLogData = {
         let t;
         if (m >= 9) {
             ac = `${y}-${y + 1}`;
-            t = '1. Dönem';
+            t = '1. Donem';
         } else if (m === 1) {
             ac = `${y - 1}-${y}`;
-            t = '1. Dönem';
+            t = '1. Donem';
         } else {
             ac = `${y - 1}-${y}`;
-            t = '2. Dönem';
+            t = '2. Donem';
         }
-        return `${ac} Eğitim Öğretim Yılı ${t}`;
-    },
-
-    async saveParentPopup(popup) {
-        if (!ClassLogAuth.isAdmin()) return false;
-        try {
-            const { data, error } = await _supabase.rpc('cl_save_parent_popup', {
-                p_token: ClassLogAuth.getSessionToken(),
-                p_class_name: popup.className || this.currentClass,
-                p_popup: {
-                    text: popup.text || '',
-                    expires_at: popup.expiresAt || null
-                }
-            });
-            if (error) {
-                console.error('saveParentPopup error:', error);
-                this._setError('Pop-up kaydedilemedi.', error);
-                return false;
-            }
-            if (data === true) {
-                this.parentPopup = this._normalizeParentNotice({
-                    text: popup.text,
-                    expires_at: popup.expiresAt
-                });
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('saveParentPopup exception:', error);
-            this._setError('Pop-up kaydedilemedi.', error);
-            return false;
-        }
+        return `${ac} Egitim Ogretim Yili ${t}`;
     }
 };

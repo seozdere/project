@@ -7,6 +7,7 @@ let notes = {};
 let currentView = 'homework';
 let currentSubject = 'turkce';
 let currentParentToken = null;
+let leaderExpanded = { homework: false, class: false };
 let parentSubjectChannel = null;
 let parentGlobalChannel = null;
 let parentPollTimer = null;
@@ -19,6 +20,44 @@ const PARENT_SESSION_EXPIRES_STORAGE_KEY = 'cl_parent_session_expires_at';
 
 function escQ(s) {
     return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function renderParentNoticeBar() {
+    const bar = document.getElementById('parentNoticeBar');
+    if (!bar) return;
+    const notice = ClassLogData.parentNotice;
+    if (!notice?.text) {
+        bar.style.display = 'none';
+        bar.innerHTML = '';
+        return;
+    }
+    bar.innerHTML = `
+        <div class="notice-icon-wrap">
+            <span class="notice-icon-anim">📢</span>
+        </div>
+        <span class="notice-text-anim">${_htmlEncode(notice.text)}</span>
+    `;
+    bar.style.display = 'flex';
+}
+
+let lastPopupShown = null;
+function renderCriticalPopup() {
+    const modal = document.getElementById('criticalPopup');
+    const content = document.getElementById('criticalPopupContent');
+    if (!modal || !content) return;
+    
+    const popup = ClassLogData.parentPopup;
+    if (!popup?.text) {
+        modal.style.display = 'none';
+        return;
+    }
+
+    // Eğer bu mesajı bu oturumda zaten gösterdiysek tekrar açma (kullanıcıyı darlamamak için)
+    if (lastPopupShown === popup.text) return;
+
+    content.textContent = popup.text;
+    modal.style.display = 'flex';
+    lastPopupShown = popup.text;
 }
 
 async function syncParentState() {
@@ -72,15 +111,26 @@ async function refreshParentView(force = false) {
         if (!ok) return false;
         lastParentRefreshAt = Date.now();
         
-        const currentStateHash = JSON.stringify({students, records, classRecords, notes, currentSubject, currentView});
+        const currentStateHash = JSON.stringify({
+            students, 
+            records, 
+            classRecords, 
+            notes, 
+            currentSubject, 
+            currentView,
+            parentNotice: ClassLogData.parentNotice,
+            parentPopup: ClassLogData.parentPopup // Pop-up değişince de fark edelim
+        });
         if (!force && currentStateHash === parentLastStateHash) {
-            return true; // No visual changes needed, skip DOM re-render
+            return true;
         }
         parentLastStateHash = currentStateHash;
 
         renderSubjectTabs();
         updateBranding();
         renderCurrentView();
+        renderParentNoticeBar();
+        renderCriticalPopup(); // Pop-up kontrolünü ekledik
         return true;
     } finally {
         parentRefreshInFlight = false;
@@ -168,6 +218,7 @@ window.switchView = function(view) {
 
     updateBranding();
     renderCurrentView();
+    renderParentNoticeBar();
 };
 
 window.toggleLeader = function() {
@@ -312,10 +363,11 @@ function renderLeader() {
         classScores[student] = Object.values(classRecords).reduce((total, day) => total + getClassMarkNet(day?.[student]), 0);
     });
 
-    const homeworkTop = [...students].sort((a, b) => homeworkScores[b] - homeworkScores[a]).slice(0, 5).filter(student => homeworkScores[student] > 0);
-    const classTop = [...students].sort((a, b) => classScores[b] - classScores[a]).slice(0, 5).filter(student => classScores[student] > 0);
-    const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
-    const rankColors = ['#F59E0B', '#94A3B8', '#CD7C40', '#64748B', '#64748B'];
+    const nameSorter = new Intl.Collator('tr', { sensitivity: 'base', numeric: true });
+    const homeworkTop = [...students].sort((a, b) => (homeworkScores[b] - homeworkScores[a]) || nameSorter.compare(a, b));
+    const classTop = [...students].sort((a, b) => (classScores[b] - classScores[a]) || nameSorter.compare(a, b));
+    const medals = ['🥇', '🥈', '🥉'];
+    const rankColors = ['#F59E0B', '#94A3B8', '#CD7C40'];
     const barColors = [
         'linear-gradient(90deg,#F59E0B,#FBBF24)',
         'linear-gradient(90deg,#94A3B8,#CBD5E1)',
@@ -324,21 +376,31 @@ function renderLeader() {
         'linear-gradient(90deg,#6366F1,#818CF8)'
     ];
 
-    function podiumHTML(list, scores, unit) {
-        if (!list.length) return '<p style="color:var(--p-muted);text-align:center;padding:32px 0;">Henüz kayıt yok.</p>';
-        const maxScore = scores[list[0]] || 1;
-        return list.map((student, index) => {
-            const score = scores[student];
+    function podiumHTML(list, scores, unit, type) {
+        if (!students.length) return '<p style="color:var(--p-muted);text-align:center;padding:32px 0;">Öğrenci listesi henüz oluşturulmamış.</p>';
+        const maxScore = Math.max(1, scores[list[0]] || 0);
+        const isExpanded = !!leaderExpanded[type];
+        const visibleList = isExpanded ? list : list.slice(0, 5);
+        const rows = visibleList.map((student, index) => {
+            const score = scores[student] || 0;
             const pct = Math.max(12, Math.round((score / maxScore) * 100));
+            const colorIndex = Math.min(index, barColors.length - 1);
+            const rankDisplay = medals[index] || `${index + 1}.`;
             return `
                 <div class="leader-row rank-${index + 1}" style="animation-delay:${index * 0.07}s">
-                    <div class="leader-rank" style="color:${rankColors[index]}">${medals[index]}</div>
+                    <div class="leader-rank" style="color:${rankColors[index] || '#64748B'}">${rankDisplay}</div>
                     <div class="leader-name">${_htmlEncode(student)}</div>
-                    <div class="leader-bar-wrap"><div class="leader-bar" style="width:${pct}%;background:${barColors[index]}"></div></div>
+                    <div class="leader-bar-wrap"><div class="leader-bar" style="width:${pct}%;background:${barColors[colorIndex]}"></div></div>
                     <div class="leader-score">${score} ${unit}</div>
                 </div>
             `;
         }).join('');
+        const remaining = Math.max(0, list.length - 5);
+        if (!remaining) return rows;
+        const buttonText = isExpanded ? 'Daha az göster' : `Daha fazlasını gör (${remaining})`;
+        return `${rows}
+            <button type="button" class="leader-more-btn" onclick="toggleLeaderList('${type}')">${buttonText}</button>
+        `;
     }
 
     panel.innerHTML = `
@@ -346,16 +408,22 @@ function renderLeader() {
             <div class="leader-section">
                 <h3 class="leader-title">📚 Ödev Liderliği</h3>
                 <p class="leader-sub">En çok ödev tamamlayan öğrenciler</p>
-                <div class="leader-list">${podiumHTML(homeworkTop, homeworkScores, 'ödev')}</div>
+                <div class="leader-list">${podiumHTML(homeworkTop, homeworkScores, 'ödev', 'homework')}</div>
             </div>
             <div class="leader-section">
                 <h3 class="leader-title">⚡ Ders İçi Liderliği</h3>
                 <p class="leader-sub">En yüksek net ders içi puanı</p>
-                <div class="leader-list">${podiumHTML(classTop, classScores, 'puan')}</div>
+                <div class="leader-list">${podiumHTML(classTop, classScores, 'puan', 'class')}</div>
             </div>
         </div>
     `;
 }
+
+window.toggleLeaderList = function(type) {
+    if (type !== 'homework' && type !== 'class') return;
+    leaderExpanded[type] = !leaderExpanded[type];
+    renderLeader();
+};
 
 window.showNote = function(student) {
     const note = notes[student];
@@ -589,6 +657,7 @@ async function init() {
             if (dashboard) dashboard.style.display = 'flex';
             renderSubjectTabs();
             switchView(currentView);
+            renderParentNoticeBar();
             lastParentRefreshAt = Date.now();
             subscribeRealtime();
             return;
@@ -615,6 +684,7 @@ async function init() {
     if (dashboard) dashboard.style.display = 'flex';
     renderSubjectTabs();
     switchView(currentView);
+    renderParentNoticeBar();
     lastParentRefreshAt = Date.now();
     subscribeRealtime();
 }

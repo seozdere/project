@@ -1,6 +1,6 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  ClassLog Pro — Admin Logic  (admin.js)  v3.1 fixed
-// ═══════════════════════════════════════════════════════════════════════════
+﻿// ============================================================================
+//  ClassLog Pro - Admin Logic (admin.js) v3.1 fixed
+// ============================================================================
 
 let students     = [];
 let records      = {};
@@ -13,19 +13,22 @@ const _urlMode      = _urlParams.get('mode');
 const _authReqParam = _urlParams.get('auth_request');
 const _isKioskStart = _urlMode === 'kiosk';
 let _kioskTimer     = null;
-let _kioskSeconds   = 10 * 60;
+let _kioskSeconds   = 15 * 60;
 const BAN_DURATION_MS = 60 * 60 * 1000;
-const KIOSK_DURATION_MS = 10 * 60 * 1000;
+const KIOSK_DURATION_MS = 15 * 60 * 1000;
 const KIOSK_REDIRECT_URL = `${window.location.pathname}?mode=board`;
 const BOARD_CODE_TTL_MS = 30 * 1000;
+let _boardCodeLoop = null;
+let _boardCurrentCode = '';
+let _boardCodeExpiresAt = 0;
+let _boardPresenceSyncTimer = null;
+let _boardCommandPollTimer = null;
+let _boardPresenceLastSyncAt = 0;
 let _boardLastCommandId = null;
 let _boardLastProcessedCommandId = null;
 let _parentNoticeDraftText = '';
 let _parentNoticeDraftDuration = '';
 const ADMIN_UI_STATE_KEY = 'cl_admin_ui_state_v1';
-let _boardCodeLoop = null;
-let _boardCurrentCode = '';
-let _boardCodeExpiresAt = 0;
 
 const currentDateInput     = document.getElementById('currentDate');
 const studentListContainer = document.getElementById('studentList');
@@ -34,64 +37,67 @@ const viewToggle           = document.getElementById('viewToggle');
 const saveStatusBadge      = document.getElementById('saveStatusBadge');
 const realtimeStatusBadge  = document.getElementById('realtimeStatusBadge');
 const syncMetaText         = document.getElementById('syncMetaText');
+const kioskParentBtn       = document.getElementById('kioskParentBtn');
 const parentNoticeInput    = document.getElementById('parentNoticeInput');
 const parentNoticeDuration = document.getElementById('parentNoticeDuration');
 const saveParentNoticeBtn  = document.getElementById('saveParentNoticeBtn');
 const clearParentNoticeBtn = document.getElementById('clearParentNoticeBtn');
 const parentNoticeMeta     = document.getElementById('parentNoticeMeta');
 
-const parentPopupInput     = document.getElementById('parentPopupInput');
-const parentPopupDuration  = document.getElementById('parentPopupDuration');
-const saveParentPopupBtn   = document.getElementById('saveParentPopupBtn');
-const clearParentPopupBtn  = document.getElementById('clearParentPopupBtn');
-const parentPopupMeta      = document.getElementById('parentPopupMeta');
-let _parentPopupDraftText = '';
-let _parentPopupDraftDuration = '';
-
-function getDataErrorMessage(fallback = 'İşlem tamamlanamadı.') {
+function getDataErrorMessage(fallback = 'Islem tamamlanamadi.') {
     const lastError = typeof ClassLogData.getLastError === 'function'
         ? ClassLogData.getLastError()
         : null;
     return lastError?.message || fallback;
 }
 
-const CLASSLOG_SECURITY_FLAGS = window.CLASSLOG_SECURITY || {
-    secureBoardPairingEnabled: false,
-    parentHtmlDownloadEnabled: false,
-    rotateParentLinksOnShare: true
-};
-
-function isSecureBoardPairingEnabled() {
-    return !!CLASSLOG_SECURITY_FLAGS.secureBoardPairingEnabled;
-}
-
-function isParentHtmlDownloadEnabled() {
-    return !!CLASSLOG_SECURITY_FLAGS.parentHtmlDownloadEnabled;
-}
-
-function renderSecurityLockScreen(title, message) {
-    document.body.innerHTML = `
-        <div style="min-height:100vh;background:var(--a-bg);display:flex;align-items:center;justify-content:center;padding:24px;">
-            <div style="width:100%;max-width:520px;background:rgba(15,23,42,.96);border:1px solid rgba(248,113,113,.25);border-radius:24px;padding:28px;box-shadow:0 28px 60px rgba(2,6,23,.45);text-align:center;">
-                <div style="font-size:2.8rem;margin-bottom:10px;">GÜVENLİK</div>
-                <h2 style="color:#fca5a5;font-size:1.45rem;margin-bottom:10px;">${_htmlEncode(title)}</h2>
-                <p style="color:#cbd5e1;line-height:1.7;">${_htmlEncode(message)}</p>
-            </div>
-        </div>`;
-}
-
-function applySecurityFeatureVisibility() {
-    const boardButtons = ['qrBtn', 'pushToBoardBtn', 'closeBoardBtn'];
-    boardButtons.forEach(id => {
-        const element = document.getElementById(id);
-        if (!element) return;
-        element.style.display = isSecureBoardPairingEnabled() ? '' : 'none';
-    });
-
-    const downloadBtn = document.getElementById('downloadParentBtn');
-    if (downloadBtn && !isParentHtmlDownloadEnabled()) {
-        downloadBtn.style.display = 'none';
+function readAdminUiState() {
+    try {
+        return JSON.parse(sessionStorage.getItem(ADMIN_UI_STATE_KEY) || 'null');
+    } catch (error) {
+        return null;
     }
+}
+
+function clearAdminUiState() {
+    sessionStorage.removeItem(ADMIN_UI_STATE_KEY);
+}
+
+function persistAdminUiState() {
+    if (ClassLogAuth.isKioskSession()) return;
+    const nextState = {
+        className: ClassLogData.currentClass || null,
+        subjectId: ClassLogData.currentSubject || null,
+        adminTab: adminTab || 'homework',
+        currentDate: currentDateInput?.value || null,
+        viewingTermId: ClassLogData.viewingTermId ?? null
+    };
+    sessionStorage.setItem(ADMIN_UI_STATE_KEY, JSON.stringify(nextState));
+}
+
+function applySavedAdminUiState() {
+    if (ClassLogAuth.isKioskSession()) return;
+    const savedState = readAdminUiState();
+    if (!savedState || typeof savedState !== 'object') return;
+    if (savedState.className) ClassLogData.currentClass = savedState.className;
+    if (savedState.subjectId) ClassLogData.currentSubject = savedState.subjectId;
+    if (savedState.adminTab === 'class' || savedState.adminTab === 'homework') adminTab = savedState.adminTab;
+    if (savedState.viewingTermId !== undefined) ClassLogData.viewingTermId = savedState.viewingTermId;
+    if (currentDateInput && savedState.currentDate) currentDateInput.value = savedState.currentDate;
+}
+
+function sanitizeUiColor(value, fallback = '#818cf8') {
+    const raw = String(value || '').trim();
+    if (!raw) return fallback;
+    if (/^#[0-9a-f]{3,8}$/i.test(raw)) return raw;
+    if (/^(rgb|rgba|hsl|hsla)\([\d\s.,%]+\)$/i.test(raw)) return raw;
+    if (/^var\(--[a-z0-9-]+\)$/i.test(raw)) return raw;
+    return fallback;
+}
+
+function sanitizeUiHexColor(value, fallback = '#818cf8') {
+    const raw = String(value || '').trim();
+    return /^#[0-9a-f]{3,8}$/i.test(raw) ? raw : fallback;
 }
 
 function getStoredKioskExpiry() {
@@ -118,14 +124,18 @@ function readKioskContext() {
 function writeKioskContext(context) {
     if (!context || typeof context !== 'object') {
         sessionStorage.removeItem('cl_kiosk_context');
+        sessionStorage.removeItem('cl_kiosk_parent_token');
         return;
     }
+    const parentToken = context.parentToken || ClassLogData.getToken(context.className || ClassLogData.currentClass) || null;
+    if (parentToken) sessionStorage.setItem('cl_kiosk_parent_token', parentToken);
     sessionStorage.setItem('cl_kiosk_context', JSON.stringify({
         className: context.className || ClassLogData.currentClass,
         subjectId: context.subjectId || ClassLogData.currentSubject,
         viewingTermId: context.viewingTermId ?? ClassLogData.viewingTermId ?? null,
         activeTermId: context.activeTermId ?? ClassLogData.activeTermId ?? null,
-        adminTab: context.adminTab || adminTab
+        adminTab: context.adminTab || adminTab,
+        parentToken
     }));
 }
 
@@ -144,7 +154,8 @@ function getCurrentBoardContext() {
         subjectId: ClassLogData.currentSubject,
         viewingTermId: ClassLogData.viewingTermId ?? ClassLogData.activeTermId ?? null,
         activeTermId: ClassLogData.activeTermId ?? null,
-        adminTab
+        adminTab,
+        parentToken: ClassLogData.getToken(ClassLogData.currentClass) || null
     };
 }
 
@@ -159,12 +170,16 @@ function renderKioskContextInfo() {
     if (!sessionStorage.getItem('cl_kiosk')) {
         infoEl.textContent = '';
         infoEl.style.display = 'none';
+        if (kioskParentBtn) kioskParentBtn.style.display = 'none';
         return;
     }
     const subjectLabel = SUBJECTS.find(s => s.id === ClassLogData.currentSubject)?.label || 'Ders';
     const modeLabel = adminTab === 'class' ? 'Ders İçi' : 'Ödev';
     infoEl.textContent = `${ClassLogData.currentClass} | ${subjectLabel} | ${modeLabel}`;
     infoEl.style.display = 'inline-flex';
+    const context = readKioskContext();
+    const kioskParentToken = context?.parentToken || sessionStorage.getItem('cl_kiosk_parent_token') || '';
+    if (kioskParentBtn) kioskParentBtn.style.display = kioskParentToken ? 'inline-flex' : 'none';
 }
 
 function computeParentNoticeExpiry(durationValue) {
@@ -180,48 +195,34 @@ function computeParentNoticeExpiry(durationValue) {
 }
 
 function renderParentNoticeAdminBar() {
+    if (!parentNoticeInput || !parentNoticeMeta) return;
     const noticeBar = document.getElementById('parentNoticeAdminBar');
-    const popupBar = document.getElementById('parentPopupAdminBar');
-    
     if (!ClassLogAuth.isAdmin()) {
         if (noticeBar) noticeBar.style.display = 'none';
-        if (popupBar) popupBar.style.display = 'none';
         return;
     }
-    
     if (noticeBar) noticeBar.style.display = 'flex';
-    if (popupBar) popupBar.style.display = 'flex';
-
-    // ── Duyuru Barı Durumu ──────────────────────────────────────────
-    const notice = ClassLogData.parentNotice;
-    if (parentNoticeInput) parentNoticeInput.value = notice?.text || _parentNoticeDraftText || '';
-    if (parentNoticeDuration) parentNoticeDuration.value = _parentNoticeDraftDuration || '';
-    if (parentNoticeMeta) {
-        if (notice?.text) {
-            const expiry = notice.expires_at ? new Date(notice.expires_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Süresiz';
-            parentNoticeMeta.textContent = `● Yayında (Bitiş: ${expiry})`;
-            parentNoticeMeta.style.color = '#fb923c';
-        } else {
-            parentNoticeMeta.textContent = '';
-        }
+    const notice = ClassLogData.getParentNotice();
+    if (!notice?.text) {
+        parentNoticeInput.value = _parentNoticeDraftText || '';
+        if (parentNoticeDuration) parentNoticeDuration.value = _parentNoticeDraftDuration || '';
+        parentNoticeMeta.textContent = 'Mesaj boş bırakılırsa veli ekranında görünmez.';
+        return;
     }
-
-    // ── Pop-up Durumu ──────────────────────────────────────────────
-    const popup = ClassLogData.parentPopup;
-    if (parentPopupInput) parentPopupInput.value = popup?.text || _parentPopupDraftText || '';
-    if (parentPopupDuration) parentPopupDuration.value = _parentPopupDraftDuration || '';
-    if (parentPopupMeta) {
-        if (popup?.text) {
-            const expiry = popup.expires_at ? new Date(popup.expires_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Süresiz';
-            parentPopupMeta.textContent = `● Yayında (Bitiş: ${expiry})`;
-            parentPopupMeta.style.color = '#818cf8';
-        } else {
-            parentPopupMeta.textContent = '';
-        }
-    }
+    parentNoticeInput.value = notice.text || '';
+    if (parentNoticeDuration) parentNoticeDuration.value = '';
+    _parentNoticeDraftText = notice.text || '';
+    _parentNoticeDraftDuration = '';
+    const expiryText = notice.expires_at
+        ? `Yayında • ${new Date(notice.expires_at).toLocaleString('tr-TR', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        })} tarihine kadar`
+        : 'Yayında • Süre bilgisi yok';
+    parentNoticeMeta.textContent = expiryText;
 }
-
-
 
 function generateBoardCode() {
     try {
@@ -252,6 +253,29 @@ function setStoredBoardTargetCode(code) {
     localStorage.setItem('cl_last_board_code', normalized);
 }
 
+function ensureBoardPresenceToken() {
+    const existing = sessionStorage.getItem('cl_board_presence_token');
+    if (existing) return existing;
+    let next = '';
+    try {
+        const values = new Uint8Array(16);
+        crypto.getRandomValues(values);
+        next = Array.from(values, value => value.toString(16).padStart(2, '0')).join('');
+    } catch (error) {
+        next = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`;
+    }
+    sessionStorage.setItem('cl_board_presence_token', next);
+    return next;
+}
+
+function getBoardPollingCode() {
+    return normalizeBoardCode(sessionStorage.getItem('cl_board_target_code') || _boardCurrentCode || '');
+}
+
+function getBoardPresenceState() {
+    return sessionStorage.getItem('cl_kiosk') ? 'active' : 'waiting';
+}
+
 function stopBoardCodeLoop() {
     if (_boardCodeLoop) {
         clearInterval(_boardCodeLoop);
@@ -267,23 +291,86 @@ function renderBoardCodeState() {
         const remainingMs = Math.max(0, _boardCodeExpiresAt - Date.now());
         const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
         countdownEl.textContent = _boardCurrentCode
-            ? `${remainingSec} sn içinde yenilenir`
-            : 'Kod hazırlanıyor';
+            ? `${remainingSec} sn icinde yenilenir`
+            : 'Kod hazirlaniyor';
     }
 }
 
 function refreshBoardCode(force = false) {
+    let changed = false;
     if (force || !_boardCurrentCode || Date.now() >= _boardCodeExpiresAt) {
+        const previous = _boardCurrentCode;
         _boardCurrentCode = generateBoardCode();
         _boardCodeExpiresAt = Date.now() + BOARD_CODE_TTL_MS;
+        changed = previous !== _boardCurrentCode;
     }
     renderBoardCodeState();
+    if (changed) {
+        _boardLastCommandId = null;
+        void syncBoardPresence(true);
+    }
 }
 
 function startBoardCodeLoop() {
     stopBoardCodeLoop();
     refreshBoardCode(true);
     _boardCodeLoop = setInterval(() => refreshBoardCode(false), 1000);
+}
+
+function stopBoardPresenceSync() {
+    if (_boardPresenceSyncTimer) {
+        clearInterval(_boardPresenceSyncTimer);
+        _boardPresenceSyncTimer = null;
+    }
+    if (_boardCommandPollTimer) {
+        clearInterval(_boardCommandPollTimer);
+        _boardCommandPollTimer = null;
+    }
+    _boardPresenceLastSyncAt = 0;
+}
+
+async function syncBoardPresence(force = false) {
+    const boardCode = getBoardPollingCode();
+    if (!/^\d{6}$/.test(boardCode)) return false;
+    const now = Date.now();
+    if (!force && now - _boardPresenceLastSyncAt < 4000) return true;
+    const ok = await ClassLogData.upsertBoardPresence({
+        boardId: CLASSLOG_BOARD_FIXED_ID,
+        boardCode,
+        clientToken: ensureBoardPresenceToken(),
+        state: getBoardPresenceState(),
+        ttlSeconds: 45
+    });
+    if (ok) _boardPresenceLastSyncAt = now;
+    return ok;
+}
+
+async function pollBoardCommandFallback() {
+    const boardCode = getBoardPollingCode();
+    if (!/^\d{6}$/.test(boardCode)) return;
+    await syncBoardPresence(false);
+    const data = await ClassLogData.pollBoardCommand({
+        clientToken: ensureBoardPresenceToken(),
+        lastCommandId: _boardLastCommandId
+    });
+    if (!data?.ok || !data.command_id || !data.command_type) return;
+    _boardLastCommandId = data.command_id;
+    const payload = data.payload || {};
+    payload.commandId = data.command_id;
+    if (data.command_type === 'unlock') handleBoardUnlock(payload);
+    if (data.command_type === 'lock') handleBoardLock(payload);
+}
+
+function startBoardPolling() {
+    stopBoardPresenceSync();
+    void syncBoardPresence(true);
+    void pollBoardCommandFallback();
+    _boardPresenceSyncTimer = setInterval(() => {
+        void syncBoardPresence(false);
+    }, 5000);
+    _boardCommandPollTimer = setInterval(() => {
+        void pollBoardCommandFallback();
+    }, 1500);
 }
 
 function promptForBoardCode(message = 'Tahta kodunu girin (6 haneli)') {
@@ -349,6 +436,7 @@ function renderKioskCountdown() {
 async function closeKioskSession(redirectUrl = KIOSK_REDIRECT_URL) {
     clearInterval(_kioskTimer);
     _kioskTimer = null;
+    stopBoardPresenceSync();
     ClassLogAuth.logout();
     location.replace(redirectUrl);
 }
@@ -356,6 +444,7 @@ async function closeKioskSession(redirectUrl = KIOSK_REDIRECT_URL) {
 // ─── Global yardımcı fonksiyonlar (HTML onclick'lerde kullanılıyor) ───────────
 window.performLogout = function() {
     clearInterval(_kioskTimer);
+    clearAdminUiState();
     ClassLogAuth.logout();
     location.replace('admin.html');
 };
@@ -414,10 +503,7 @@ function updateTeacherUI() {
             nameEl.innerHTML = `<span class="teacher-identity">Tahta oturumu: ${_htmlEncode(t.name || t.username || 'Öğretmen')}</span>`;
         }
         else if (ClassLogAuth.isAdmin()) {
-            const displayName = (t.name && !t.name.includes('Y\u251c') && !t.name.includes('Y\u00c3')) 
-                ? t.name 
-                : 'Sistem Y\u00f6neticisi';
-            nameEl.innerHTML = `<span class="admin-identity">👑 ${_htmlEncode(displayName)}</span>`;
+            nameEl.innerHTML = `<span class="admin-identity">👑 ${_htmlEncode(t.name || 'Sistem Yöneticisi')}</span>`;
         } else {
             nameEl.innerHTML = `<span class="teacher-identity">👨‍🏫 ${_htmlEncode(t.name || t.username)}</span>`;
         }
@@ -425,8 +511,6 @@ function updateTeacherUI() {
     document.querySelectorAll('.admin-only').forEach(el => {
         el.style.display = ClassLogAuth.isAdmin() ? '' : 'none';
     });
-    renderParentNoticeAdminBar();
-    applySecurityFeatureVisibility();
     if (sessionStorage.getItem('cl_kiosk')) {
         document.querySelectorAll('.no-kiosk').forEach(el => el.style.display = 'none');
         applyKioskRestrictions();
@@ -522,7 +606,7 @@ function renderSubjectTabs() {
     }
     container.innerHTML = visibleSubjects.map(s => `
         <button class="subject-tab ${s.id === ClassLogData.currentSubject ? 'active' : ''}"
-                style="--tab-color:${s.color}"
+                style="--tab-color:${sanitizeUiColor(s.color)}"
                 onclick="switchSubject('${s.id}')">
             ${_htmlEncode(s.emoji)} ${_htmlEncode(s.label)}
         </button>`).join('');
@@ -535,6 +619,7 @@ window.switchSubject = async function(subjectId) {
         if (!teacher.subjects.includes(subjectId)) return;
     }
     ClassLogData.currentSubject = subjectId;
+    persistAdminUiState();
     persistKioskContext();
     renderSubjectTabs();
     await ClassLogData.sync();
@@ -548,6 +633,7 @@ window.switchSubject = async function(subjectId) {
 // ─── Admin Sekme ──────────────────────────────────────────────────────────────
 window.switchAdminTab = function(tab) {
     adminTab = tab;
+    persistAdminUiState();
     const tH = document.getElementById('tabHomework');
     const tC = document.getElementById('tabClass');
     if (tH) tH.classList.toggle('active', tab === 'homework');
@@ -578,17 +664,18 @@ function renderStudents() {
             const initials = getInitials(student);
             const status   = dayRec[student];
             const hasNote  = notes[student] ? 'note-active' : '';
+            const esc      = student.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
             return `
             <div class="student-card" data-index="${idx}">
-                <div class="s-avatar" style="background:${color};">${_htmlEncode(initials)}</div>
+                <div class="s-avatar" style="background:${color};">${initials}</div>
                 <span class="s-name">${_htmlEncode(student)}</span>
-                <button class="note-btn ${hasNote}" onclick="openNoteByIndex(${idx})">${notes[student] ? '📝' : '💬'}</button>
+                <button class="note-btn ${hasNote}" onclick="openNote('${esc}')">${notes[student] ? '📝' : '💬'}</button>
                 <div class="controls">
-                    <button class="btn btn-pos     ${status===1  ?'active':''}" onclick="setMarkByIndex(${idx},1)"  title="Tamam (+)">+</button>
-                    <button class="btn btn-neg     ${status===-1 ?'active':''}" onclick="setMarkByIndex(${idx},-1)" title="Eksik (-)">−</button>
-                    <button class="btn btn-half    ${status===2  ?'active':''}" onclick="setMarkByIndex(${idx},2)"  title="Yarım (●)">●</button>
-                    <button class="btn btn-neutral ${status===0  ?'active':''}" onclick="setMarkByIndex(${idx},0)"  title="Kitap Yok">●</button>
-                    <button class="btn btn-absent  ${status===3  ?'active':''}" onclick="setMarkByIndex(${idx},3)"  title="Gelmedi">●</button>
+                    <button class="btn btn-pos     ${status===1  ?'active':''}" onclick="setMark('${esc}',1)"  title="Tamam (+)">+</button>
+                    <button class="btn btn-neg     ${status===-1 ?'active':''}" onclick="setMark('${esc}',-1)" title="Eksik (-)">-</button>
+                    <button class="btn btn-half    ${status===2  ?'active':''}" onclick="setMark('${esc}',2)"  title="Yarım (●)">●</button>
+                    <button class="btn btn-neutral ${status===0  ?'active':''}" onclick="setMark('${esc}',0)"  title="Kitap Yok">●</button>
+                    <button class="btn btn-absent  ${status===3  ?'active':''}" onclick="setMark('${esc}',3)"  title="Gelmedi">●</button>
                 </div>
             </div>`;
         }).join('');
@@ -599,46 +686,23 @@ function renderStudents() {
             const dayStats = getClassMarkStats(dayRec[student]);
             const posCount = countClassStatus(student, 1);
             const negCount = countClassStatus(student, -1);
+            const esc      = student.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
             return `
             <div class="student-card" data-index="${idx}">
-                <div class="s-avatar" style="background:${color};">${_htmlEncode(initials)}</div>
+                <div class="s-avatar" style="background:${color};">${initials}</div>
                 <span class="s-name">${_htmlEncode(student)}</span>
                 <div class="class-score-mini">
                     <span class="csm-pos">+${posCount}</span>
-                    <span class="csm-neg">−${negCount}</span>
+                    <span class="csm-neg">-${negCount}</span>
                 </div>
                 <div class="controls">
-                    <button class="btn btn-pos ${dayStats.pos > 0 ? 'active' : ''}" onclick="setClassMarkByIndex(${idx},1)"  title="Artı ekle (+)" style="width:52px;font-size:1.2rem;">+${dayStats.pos > 0 ? dayStats.pos : ''}</button>
-                    <button class="btn btn-neg ${dayStats.neg > 0 ? 'active' : ''}" onclick="setClassMarkByIndex(${idx},-1)" title="Eksi ekle (−)" style="width:52px;font-size:1.2rem;">−${dayStats.neg > 0 ? dayStats.neg : ''}</button>
+                    <button class="btn btn-pos ${dayStats.pos > 0 ? 'active' : ''}" onclick="setClassMark('${esc}',1)"  title="Artı ekle (+)" style="width:52px;font-size:1.2rem;">+${dayStats.pos > 0 ? dayStats.pos : ''}</button>
+                    <button class="btn btn-neg ${dayStats.neg > 0 ? 'active' : ''}" onclick="setClassMark('${esc}',-1)" title="Eksi ekle (-)" style="width:52px;font-size:1.2rem;">-${dayStats.neg > 0 ? dayStats.neg : ''}</button>
                 </div>
             </div>`;
         }).join('');
     }
 }
-
-function getStudentByIndex(index) {
-    const numericIndex = Number(index);
-    if (!Number.isInteger(numericIndex) || numericIndex < 0 || numericIndex >= students.length) return null;
-    return students[numericIndex] || null;
-}
-
-window.openNoteByIndex = function(index) {
-    const student = getStudentByIndex(index);
-    if (!student) return;
-    openNote(student);
-};
-
-window.setMarkByIndex = function(index, status) {
-    const student = getStudentByIndex(index);
-    if (!student) return;
-    return setMark(student, status);
-};
-
-window.setClassMarkByIndex = function(index, status) {
-    const student = getStudentByIndex(index);
-    if (!student) return;
-    return setClassMark(student, status);
-};
 
 function updateCardButtons(studentName, newStatus) {
     const idx  = students.indexOf(studentName);
@@ -657,12 +721,12 @@ function updateCardButtons(studentName, newStatus) {
         }
         if (negBtn) {
             negBtn.classList.toggle('active', stats.neg > 0);
-            negBtn.textContent = `−${stats.neg > 0 ? stats.neg : ''}`;
+            negBtn.textContent = `-${stats.neg > 0 ? stats.neg : ''}`;
         }
         const posEl = card.querySelector('.csm-pos');
         const negEl = card.querySelector('.csm-neg');
         if (posEl) posEl.textContent = '+' + countClassStatus(studentName, 1);
-        if (negEl) negEl.textContent = '−' + countClassStatus(studentName, -1);
+        if (negEl) negEl.textContent = '-' + countClassStatus(studentName, -1);
     }
 }
 
@@ -695,9 +759,9 @@ let _adminRealtimeFlags = { base: 'idle', subject: 'idle', global: 'idle', local
 let _isApplyingLocalMark = false;
 
 function formatClock(value) {
-    if (!value) return '—';
+    if (!value) return '-';
     const date = value instanceof Date ? value : new Date(value);
-    if (Number.isNaN(date.getTime())) return '—';
+    if (Number.isNaN(date.getTime())) return '-';
     return date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
@@ -736,18 +800,18 @@ function setRealtimeFlag(channel, status) {
     const hasError = values.some(value => ['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(value));
 
     if (liveCount > 0) {
-        setBadgeState(realtimeStatusBadge, `Realtime: canlı (${liveCount})`, 'status-live');
+        setBadgeState(realtimeStatusBadge, `Canlı senkron aktif (${liveCount})`, 'status-live');
         return;
     }
     if (hasError) {
-        setBadgeState(realtimeStatusBadge, 'Realtime: sorun var', 'status-error');
+        setBadgeState(realtimeStatusBadge, 'Yedek senkron aktif', 'status-muted');
         return;
     }
-    setBadgeState(realtimeStatusBadge, 'Realtime: bağlanıyor', 'status-muted');
+    setBadgeState(realtimeStatusBadge, 'Yedek senkron aktif', 'status-muted');
 }
 
 function markRealtimeEvent(source) {
-    setBadgeState(realtimeStatusBadge, `Realtime: olay alındı (${source})`, 'status-live');
+    setBadgeState(realtimeStatusBadge, `Canlı güncelleme alındı (${source})`, 'status-live');
 }
 
 function renderMarkingInfo() {
@@ -777,7 +841,7 @@ function renderMarkingInfo() {
                     Gri: Gelmedi
                 </span>
                 <span style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(148,163,184,.16);border:1px solid rgba(203,213,225,.22);color:#e2e8f0;font-weight:700;">
-                    Tümünü Sıfırla : Seçili günün işaretlerini temizler
+                    Tümünü Sıfırla: Seçili günün işaretlerini temizler
                 </span>
             </div>`;
     } else {
@@ -785,14 +849,14 @@ function renderMarkingInfo() {
             <div style="display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;justify-content:center;">
                 <span style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(34,197,94,.14);border:1px solid rgba(74,222,128,.24);color:#dcfce7;font-weight:700;">
                     <span style="width:12px;height:12px;border-radius:999px;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.18);"></span>
-                    Yeşil + : Önce eksiyi azaltır, yoksa artı ekler
+                    Yeşil +: Önce eksiyi azaltır, yoksa artı ekler
                 </span>
                 <span style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(239,68,68,.14);border:1px solid rgba(248,113,113,.24);color:#fee2e2;font-weight:700;">
                     <span style="width:12px;height:12px;border-radius:999px;background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.18);"></span>
-                    Kırmızı − : Önce artıyı azaltır, yoksa eksi ekler
+                    Kırmızı -: Önce artıyı azaltır, yoksa eksi ekler
                 </span>
                 <span style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:rgba(148,163,184,.16);border:1px solid rgba(203,213,225,.22);color:#e2e8f0;font-weight:700;">
-                    Tümünü Sıfırla : Seçili günün işaretlerini temizler
+                    Tümünü Sıfırla: Seçili günün işaretlerini temizler
                 </span>
             </div>`;
     }
@@ -810,7 +874,7 @@ async function resyncAdminState() {
 // ─── Ödev İşareti ─────────────────────────────────────────────────────────────
 window.setMark = async function(studentName, status) {
     if (ClassLogData.viewingTermId !== null && ClassLogData.viewingTermId !== ClassLogData.activeTermId) {
-        setBadgeState(realtimeStatusBadge, 'Realtime: arşiv modunda kapalı', 'status-muted');
+        setBadgeState(realtimeStatusBadge, 'Canlı senkron arşivde kapalı', 'status-muted');
         return;
     }
     setSaveStatus('Kaydediliyor...', 'status-saving', true);
@@ -846,7 +910,7 @@ window.setMark = async function(studentName, status) {
 // ─── Ders İçi İşareti ────────────────────────────────────────────────────────
 window.setClassMark = async function(studentName, status) {
     if (ClassLogData.viewingTermId !== null && ClassLogData.viewingTermId !== ClassLogData.activeTermId) {
-        setBadgeState(realtimeStatusBadge, 'Realtime: arşiv modunda kapalı', 'status-muted');
+        setBadgeState(realtimeStatusBadge, 'Canlı senkron arşivde kapalı', 'status-muted');
         return;
     }
     setSaveStatus('Kaydediliyor...', 'status-saving', true);
@@ -883,7 +947,7 @@ window.setClassMark = async function(studentName, status) {
 async function applyBulkStatus(status) {
     if (!students.length) return;
     if (ClassLogData.viewingTermId !== null && ClassLogData.viewingTermId !== ClassLogData.activeTermId) {
-        setBadgeState(realtimeStatusBadge, 'Realtime: arşiv modunda kapalı', 'status-muted');
+        setBadgeState(realtimeStatusBadge, 'Canlı senkron arşivde kapalı', 'status-muted');
         return;
     }
 
@@ -955,7 +1019,7 @@ window.bulkSetMark = function(status) {
 async function applyBulkClear() {
     if (!students.length) return;
     if (ClassLogData.viewingTermId !== null && ClassLogData.viewingTermId !== ClassLogData.activeTermId) {
-        setBadgeState(realtimeStatusBadge, 'Realtime: arşiv modunda kapalı', 'status-muted');
+        setBadgeState(realtimeStatusBadge, 'Canlı senkron arşivde kapalı', 'status-muted');
         return;
     }
 
@@ -1054,8 +1118,8 @@ if (saveNoteBtn) saveNoteBtn.onclick = async () => {
     setSaveStatus('Not kaydediliyor...', 'status-saving', true);
     const ok = await ClassLogData.saveNotes(notes);
     if (!ok) {
-        setSaveStatus('Not kaydı hatalı', 'status-error');
-        alert(`${getDataErrorMessage('Not kaydedilemedi.')}\nVeri yeniden yükleniyor.`);
+        setSaveStatus('Not kaydi hatali', 'status-error');
+        alert(`${getDataErrorMessage('Not kaydedilemedi.')}\nVeri yeniden yukleniyor.`);
         await resyncAdminState();
         return;
     }
@@ -1073,7 +1137,11 @@ const closeManageBtn  = document.getElementById('closeManageModal');
 const saveStudentsBtn = document.getElementById('saveStudentsBtn');
 const bulkInput       = document.getElementById('bulkInput');
 
-if (manageBtn)      manageBtn.onclick      = () => { if (bulkInput) bulkInput.value = students.join('\n'); if (manageModal) manageModal.style.display = 'flex'; };
+if (manageBtn)      manageBtn.onclick      = () => {
+    if (!ClassLogAuth.isAdmin()) return;
+    if (bulkInput) bulkInput.value = students.join('\n');
+    if (manageModal) manageModal.style.display = 'flex';
+};
 if (closeManageBtn) closeManageBtn.onclick = () => { if (manageModal) manageModal.style.display = 'none'; };
 
 window.onclick = e => {
@@ -1092,6 +1160,7 @@ window.onclick = e => {
 };
 
 if (saveStudentsBtn) saveStudentsBtn.onclick = async () => {
+    if (!ClassLogAuth.isAdmin()) return;
     const newStudents = bulkInput.value.split('\n').map(s=>s.trim()).filter(s=>s.length);
     if (confirm(`${newStudents.length} öğrenci kaydedilecek. Onaylıyor musunuz?`)) {
         students = newStudents;
@@ -1133,82 +1202,137 @@ if (exportBtn) exportBtn.onclick = () => {
 };
 
 // ─── Tarih Navigasyon ─────────────────────────────────────────────────────────
-if (currentDateInput) currentDateInput.onchange = renderStudents;
+if (currentDateInput) currentDateInput.onchange = () => {
+    persistAdminUiState();
+    renderStudents();
+};
 
 const prevDateBtn = document.getElementById('prevDate');
 const nextDateBtn = document.getElementById('nextDate');
 if (prevDateBtn) prevDateBtn.onclick = () => {
     const d = new Date(currentDateInput.value); d.setDate(d.getDate()-1);
-    currentDateInput.value = d.toISOString().split('T')[0]; renderStudents();
+    currentDateInput.value = d.toISOString().split('T')[0];
+    persistAdminUiState();
+    renderStudents();
 };
 if (nextDateBtn) nextDateBtn.onclick = () => {
     const d = new Date(currentDateInput.value); d.setDate(d.getDate()+1);
-    currentDateInput.value = d.toISOString().split('T')[0]; renderStudents();
+    currentDateInput.value = d.toISOString().split('T')[0];
+    persistAdminUiState();
+    renderStudents();
 };
 
 // ─── Link Kopyala ─────────────────────────────────────────────────────────────
 async function updateParentViewHref(className = ClassLogData.currentClass) {
     if (!viewToggle) return;
-    viewToggle.href = 'parent.html';
-    viewToggle.onclick = async event => {
-        event.preventDefault();
-        const linkCode = await ClassLogData.ensureParentLink(
-            className,
-            !!CLASSLOG_SECURITY_FLAGS.rotateParentLinksOnShare
-        );
-        if (!linkCode) {
-            alert(getDataErrorMessage('Veli görünümü açılamadı.'));
-            return;
-        }
-        window.location.href = `parent.html?link=${encodeURIComponent(linkCode)}`;
-    };
+    const token = await ClassLogData.ensureParentToken(className);
+    viewToggle.href = token ? `parent.html?id=${encodeURIComponent(token)}` : 'parent.html';
 }
 
-const copyExistingLinkBtn = document.getElementById('copyExistingLinkBtn');
-if (copyExistingLinkBtn) copyExistingLinkBtn.onclick = async () => {
-    const linkCode = await ClassLogData.ensureParentLink(ClassLogData.currentClass, false);
-    if (!linkCode) { alert(getDataErrorMessage('Veli linki üretilemedi.')); return; }
-    const url = `${window.location.origin}${window.location.pathname.replace('admin.html','parent.html')}?link=${encodeURIComponent(linkCode)}`;
+async function openParentViewInNewTab(className = ClassLogData.currentClass) {
+    const context = readKioskContext();
+    let token = context?.parentToken || sessionStorage.getItem('cl_kiosk_parent_token') || ClassLogData.getToken(className) || null;
+    if (token) {
+        const url = `${window.location.origin}${window.location.pathname.replace('admin.html','parent.html')}?id=${encodeURIComponent(token)}`;
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+    }
+    if (!token && !ClassLogAuth.isKioskSession()) {
+        token = await ClassLogData.ensureParentToken(className);
+    }
+    if (!token) {
+        alert(getDataErrorMessage('Veli görünümü açılamadı.'));
+        return;
+    }
+    const url = `${window.location.origin}${window.location.pathname.replace('admin.html','parent.html')}?id=${encodeURIComponent(token)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+async function saveParentNoticeFromAdmin() {
+    if (!parentNoticeInput) return;
+    if (!ClassLogAuth.isAdmin()) {
+        alert('Bu alanı yalnızca admin kullanabilir.');
+        return;
+    }
+    const text = parentNoticeInput.value.trim();
+    const duration = parentNoticeDuration?.value || '';
+    _parentNoticeDraftText = text;
+    _parentNoticeDraftDuration = duration;
+    if (text && !duration) {
+        alert('Veli uyarısı için bir süre seçin.');
+        return;
+    }
+    const expiresAt = text ? computeParentNoticeExpiry(duration) : null;
+    setSaveStatus('Veli uyarısı yayınlanıyor...', 'status-saving', true);
+    const ok = await ClassLogData.saveParentNotice({
+        className: ClassLogData.currentClass,
+        text,
+        expiresAt
+    });
+    if (!ok) {
+        setSaveStatus('Veli uyarısı hatası', 'status-error');
+        const fallbackMeta = text
+            ? 'Kaydetme başarısız oldu. Yazdığınız metin korunuyor; SQL güncellemesini kontrol edin.'
+            : 'Kaldırma başarısız oldu.';
+        if (parentNoticeMeta) parentNoticeMeta.textContent = fallbackMeta;
+        alert(getDataErrorMessage('Veli uyarısı kaydedilemedi.'));
+        return;
+    }
+    renderParentNoticeAdminBar();
+    renderSyncMeta();
+    _parentNoticeDraftText = text;
+    _parentNoticeDraftDuration = '';
+    setSaveStatus(text ? 'Veli uyarısı yayında' : 'Veli uyarısı kaldırıldı', 'status-ok');
+}
+
+const copyLinkBtn = document.getElementById('copyLinkBtn');
+if (copyLinkBtn) copyLinkBtn.onclick = async () => {
+    const token = await ClassLogData.ensureParentToken(ClassLogData.currentClass);
+    if (!token) { alert(getDataErrorMessage('Veli linki üretilemedi.')); return; }
+    const url = `${window.location.origin}${window.location.pathname.replace('admin.html','parent.html')}?id=${encodeURIComponent(token)}`;
     navigator.clipboard.writeText(url).then(() => {
-        const orig = copyExistingLinkBtn.textContent;
-        copyExistingLinkBtn.textContent = "✅ Kopyalandı!";
-        setTimeout(() => copyExistingLinkBtn.textContent = orig, 2200);
+        const orig = copyLinkBtn.textContent;
+        copyLinkBtn.textContent = "✅ Kopyalandı!";
+        setTimeout(() => copyLinkBtn.textContent = orig, 2200);
     });
 };
-
-const createNewLinkBtn = document.getElementById('createNewLinkBtn');
-if (createNewLinkBtn) createNewLinkBtn.onclick = async () => {
-    if (!confirm('🚨 DİKKAT: Yeni bir link oluşturduğunuzda, daha önce paylaştığınız veli linki GÜVENLİK gereği iptal olacaktır.\n\nYeni link oluşturmayı onaylıyor musunuz?')) return;
-    const linkCode = await ClassLogData.ensureParentLink(ClassLogData.currentClass, true);
-    if (!linkCode) { alert(getDataErrorMessage('Veli linki üretilemedi.')); return; }
-    const url = `${window.location.origin}${window.location.pathname.replace('admin.html','parent.html')}?link=${encodeURIComponent(linkCode)}`;
-    navigator.clipboard.writeText(url).then(() => {
-        const orig = createNewLinkBtn.textContent;
-        createNewLinkBtn.textContent = "✅ Kopyalandı!";
-        setTimeout(() => createNewLinkBtn.textContent = orig, 2200);
-    });
+if (kioskParentBtn) kioskParentBtn.onclick = () => { void openParentViewInNewTab(ClassLogData.currentClass); };
+if (parentNoticeInput) parentNoticeInput.addEventListener('input', () => { _parentNoticeDraftText = parentNoticeInput.value; });
+if (parentNoticeDuration) parentNoticeDuration.addEventListener('change', () => { _parentNoticeDraftDuration = parentNoticeDuration.value; });
+if (saveParentNoticeBtn) saveParentNoticeBtn.onclick = () => { void saveParentNoticeFromAdmin(); };
+if (clearParentNoticeBtn) clearParentNoticeBtn.onclick = async () => {
+    if (parentNoticeInput) parentNoticeInput.value = '';
+    if (parentNoticeDuration) parentNoticeDuration.value = '';
+    await saveParentNoticeFromAdmin();
 };
 
 // ─── Tahta / Cihaz Eşleştirme ────────────────────────────────────────────────
 // ─── Tahtayı Aç: telefon butonuyla sabit kanala kimlik gönder ────────────────
 async function buildBoardUnlockPayload(boardCode, contextOverride = null) {
-    if (!isSecureBoardPairingEnabled()) {
-        throw new Error('Tahta eşleştirme geçici olarak kapatıldı. Güvenli sunucu yaması uygulanmalı.');
-    }
     const normalizedBoardCode = normalizeBoardCode(boardCode);
     if (!/^\d{6}$/.test(normalizedBoardCode)) {
         throw new Error('Geçerli bir tahta kodu girin.');
     }
-    const context = contextOverride || getCurrentBoardContext();
+    const context = { ...(contextOverride || getCurrentBoardContext()) };
+    if (!context.parentToken) {
+        context.parentToken = await ClassLogData.ensureParentToken(context.className || ClassLogData.currentClass);
+    }
     const kioskSession = await ClassLogAuth.createKioskSession(context);
     if (!kioskSession?.sessionToken) {
-        throw new Error('Kiosk oturumu oluşturulamadı.');
+        throw new Error('Kiosk oturumu olusturulamadi.');
     }
     setStoredBoardTargetCode(normalizedBoardCode);
     return {
         token: kioskSession.sessionToken,
         teacher: kioskSession.teacher || ClassLogAuth.getTeacher(),
         context,
+        parentToken: context.parentToken || null,
         expiresAt: kioskSession.expiresAt ? new Date(kioskSession.expiresAt).getTime() : (Date.now() + KIOSK_DURATION_MS),
         sessionKind: kioskSession.sessionKind || 'kiosk',
         boardCode: normalizedBoardCode
@@ -1216,23 +1340,23 @@ async function buildBoardUnlockPayload(boardCode, contextOverride = null) {
 }
 
 async function sendBoardCommand(eventName, payload = {}) {
-    const ch = await _getBroadcastChannel(CLASSLOG_BOARD_CHANNEL);
-    await ch.send({
-        type: 'broadcast',
-        event: eventName,
-        payload: {
-            ts: Date.now(),
-            ...payload
-        }
+    const commandType = eventName === 'unlock' ? 'unlock' : 'lock';
+    const issued = await ClassLogData.issueBoardCommand({
+        boardId: CLASSLOG_BOARD_FIXED_ID,
+        boardCode: payload.boardCode,
+        commandType,
+        payload
     });
+    try {
+        await _sendBroadcastEvent(CLASSLOG_BOARD_CHANNEL, eventName, payload, 3);
+    } catch (error) {
+        console.warn('Realtime board command fallback used:', error);
+    }
+    return issued;
 }
 
 const pushToBoardBtn = document.getElementById('pushToBoardBtn');
 if (pushToBoardBtn) pushToBoardBtn.onclick = async () => {
-    if (!isSecureBoardPairingEnabled()) {
-        alert('Tahta özelliği güvenli sunucu yaması beklediği için şimdilik kapalı.');
-        return;
-    }
     const orig = pushToBoardBtn.textContent;
     const boardCode = promptForBoardCode();
     if (!boardCode) return;
@@ -1258,19 +1382,16 @@ if (pushToBoardBtn) pushToBoardBtn.onclick = async () => {
 
 const closeBoardBtn = document.getElementById('closeBoardBtn');
 if (closeBoardBtn) closeBoardBtn.onclick = async () => {
-    if (!isSecureBoardPairingEnabled()) {
-        alert('Tahta özelliği güvenli sunucu yaması beklediği için şimdilik kapalı.');
-        return;
-    }
     const orig = closeBoardBtn.textContent;
-    const boardCode = getStoredBoardTargetCode() || promptForBoardCode('Kapatılacak tahta kodunu girin');
+    const boardCode = getStoredBoardTargetCode() || promptForBoardCode('Kapatilacak tahta kodunu girin');
     if (!boardCode) return;
-    closeBoardBtn.textContent = 'Kapatılıyor...';
+        closeBoardBtn.textContent = 'Kapatılıyor...';
     closeBoardBtn.disabled = true;
     try {
         await sendBoardCommand('lock', {
             teacher: ClassLogAuth.getTeacher(),
             reason: 'manual',
+            context: getCurrentBoardContext(),
             boardCode
         });
         setStoredBoardTargetCode('');
@@ -1292,13 +1413,6 @@ if (closeBoardBtn) closeBoardBtn.onclick = async () => {
 async function handleRemoteAuthIfNeeded() {
     const authReq = _authReqParam;
     if (!authReq || !ClassLogAuth.isLoggedIn()) return false;
-    if (!isSecureBoardPairingEnabled()) {
-        renderSecurityLockScreen(
-            'Tahta özelliği kapalı',
-            'Bu kurulumda tahta eşleştirme özelliği güvenlik nedeniyle devre dışı. Sunucu yaması uygulanmadan açılmıyor.'
-        );
-        return true;
-    }
 
     await ClassLogData.syncSettings();
     const teacher = ClassLogAuth.getTeacher() || {};
@@ -1400,10 +1514,6 @@ const qrBtn = document.getElementById('qrBtn');
 if (qrBtn) qrBtn.onclick = showBoardQR;
 
 function showBoardQR() {
-    if (!isSecureBoardPairingEnabled()) {
-        alert('Tahta QR özelliği güvenli sunucu yaması gelene kadar kapalı.');
-        return;
-    }
     const modal   = document.getElementById('qrModal');
     const label   = document.getElementById('qrClassLabel');
     const img     = document.getElementById('qrImage');
@@ -1415,7 +1525,7 @@ function showBoardQR() {
     const boardAuthUrl = `${window.location.origin}${window.location.pathname}?auth_request=${CLASSLOG_BOARD_FIXED_ID}`;
     const boardUrl     = `${window.location.origin}${window.location.pathname}?mode=board`;
 
-    if (label)   label.textContent = '🖥️ Tahta QR — Telefon ile Tarat';
+    if (label)   label.textContent = '🖥️ Tahta QR — Telefon ile Tara';
     if (img)     img.src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&color=F1F5FF&bgcolor=0D1525&data=${encodeURIComponent(boardAuthUrl)}`;
     if (countEl) countEl.textContent = '♾️ Sabit QR — Asla değişmez';
     if (infoEl)  infoEl.innerHTML = `
@@ -1435,6 +1545,7 @@ function showBoardQR() {
 if (classSelector) classSelector.onchange = async e => {
     const newClass = e.target.value;
     await ClassLogData.setClass(newClass);
+    persistAdminUiState();
     persistKioskContext();
     await loadData();
     await updateParentViewHref(newClass);
@@ -1512,7 +1623,7 @@ window.editTeacher = async function(id) {
     // Ders seçimi
     const tSubjects = document.getElementById('tSubjects');
     if (tSubjects) tSubjects.innerHTML = SUBJECTS.map(s => `
-        <label class="class-check" style="--chk-color:${s.color}20;border-color:${s.color}40;">
+        <label class="class-check" style="--chk-color:${sanitizeUiHexColor(s.color)}20;border-color:${sanitizeUiHexColor(s.color)}40;">
             <input type="checkbox" name="tSubject" value="${s.id}" ${(t.subjects||[]).includes(s.id)?'checked':''}> ${_htmlEncode(s.emoji)} ${_htmlEncode(s.label)}
         </label>`).join('');
 
@@ -1582,8 +1693,8 @@ window.updateTermString = async function() {
         (t.id === null && ClassLogData.activeTermId === null));
     if (idx >= 0) terms[idx].label = label;
     ClassLogData.terms = terms;
-    setSaveStatus('Dönem ayarı kaydediliyor...', 'status-saving', true);
-    if (!await ClassLogData.saveSettings()) { setSaveStatus('Dönem ayarı hatalı', 'status-error'); alert('Dönem ayarı kaydedilemedi.'); return; }
+    setSaveStatus('Donem ayari kaydediliyor...', 'status-saving', true);
+    if (!await ClassLogData.saveSettings()) { setSaveStatus('Donem ayari hatali', 'status-error'); alert('Donem ayari kaydedilemedi.'); return; }
     renderSyncMeta();
     setSaveStatus('Donem ayari kaydedildi', 'status-ok');
     alert('✅ Dönem adı güncellendi.');
@@ -1631,8 +1742,8 @@ window.createNewTerm = async function() {
     ClassLogData.viewingTermId = null;
     persistKioskContext();
 
-    setSaveStatus('Yeni dönem hazırlanıyor...', 'status-saving', true);
-    if (!await ClassLogData.saveSettings()) { setSaveStatus('Yeni dönem hatası', 'status-error'); alert('Yeni dönem başlatılamadı.'); return; }
+    setSaveStatus('Yeni donem hazirlaniyor...', 'status-saving', true);
+    if (!await ClassLogData.saveSettings()) { setSaveStatus('Yeni donem hatasi', 'status-error'); alert('Yeni donem baslatilamadi.'); return; }
     await ClassLogData.sync();  // yeni dönem → boş veri
     await loadData();
 
@@ -1642,7 +1753,7 @@ window.createNewTerm = async function() {
     renderStudents();
     renderSubjectTabs();
     renderSyncMeta();
-    setSaveStatus('Yeni dönem başlatıldı', 'status-ok');
+    setSaveStatus('Yeni donem baslatildi', 'status-ok');
     document.getElementById('termManageModal').style.display = 'none';
     alert(`✅ "${label}" dönemi başlatıldı!\nMevcut veriler arşivlendi.`);
 };
@@ -1683,7 +1794,7 @@ window.renderSubjectManager = function() {
     container.innerHTML = SUBJECTS.map((s, idx) => `
         <div style="display:flex;align-items:center;justify-content:space-between;background:var(--a-surface);padding:10px 14px;border-radius:8px;border:1px solid var(--a-border2);">
             <div style="display:flex;align-items:center;gap:10px;">
-                <div style="width:24px;height:24px;border-radius:50%;background:${s.color};display:flex;align-items:center;justify-content:center;font-size:.8rem;">${_htmlEncode(s.emoji)}</div>
+                <div style="width:24px;height:24px;border-radius:50%;background:${sanitizeUiColor(s.color)};display:flex;align-items:center;justify-content:center;font-size:.8rem;">${_htmlEncode(s.emoji)}</div>
                 <strong style="color:var(--a-text);font-size:.9rem;">${_htmlEncode(s.label)}</strong>
             </div>
             <label style="font-size:.78rem;color:var(--a-muted);display:flex;align-items:center;gap:6px;cursor:pointer;" title="Veli panelinde göster/gizle">
@@ -1696,47 +1807,26 @@ window.renderSubjectManager = function() {
 window.toggleSubjectParentVisibility = async function(idx) {
     if (SUBJECTS[idx].id === 'turkce') return;
     SUBJECTS[idx].showInParent = !SUBJECTS[idx].showInParent;
-    setSaveStatus('Ders ayarı kaydediliyor...', 'status-saving', true);
-    if (!await ClassLogData.saveSettings()) { setSaveStatus('Ders ayarı hatalı', 'status-error'); alert('Ders görünüm ayarı kaydedilemedi.'); return; }
+    setSaveStatus('Ders ayari kaydediliyor...', 'status-saving', true);
+    if (!await ClassLogData.saveSettings()) { setSaveStatus('Ders ayari hatali', 'status-error'); alert('Ders gorunum ayari kaydedilemedi.'); return; }
     renderSubjectManager();
     renderSyncMeta();
-    setSaveStatus('Ders ayarı kaydedildi', 'status-ok');
+    setSaveStatus('Ders ayari kaydedildi', 'status-ok');
 };
 
 window.addNewSubject = async function() {
     const emojiInput = document.getElementById('newSubjEmoji');
     const labelInput = document.getElementById('newSubjLabel');
     const colorInput = document.getElementById('newSubjColor');
-    const draft = typeof window.ClassLogSanitizeSubjectDefinition === 'function'
-        ? window.ClassLogSanitizeSubjectDefinition({
-            emoji: emojiInput?.value,
-            label: labelInput?.value,
-            color: colorInput?.value
-        }, SUBJECTS.length)
-        : null;
     const emoji = (emojiInput?.value.trim()) || '📚';
     const label = labelInput?.value.trim();
     const color = colorInput?.value || '#6366F1';
     if (!label) { alert("Ders adı boş olamaz."); return; }
     const id = label.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const safeSubject = draft || {
-        id,
-        label,
-        emoji,
-        color,
-        showInParent: false
-    };
-    if (!safeSubject.label || !safeSubject.id) { alert('Ders adi bos olamaz.'); return; }
-    if (SUBJECTS.find(s => s.id === safeSubject.id)) { alert("Bu isimde bir ders zaten var."); return; }
-    SUBJECTS.push({
-        id: safeSubject.id,
-        label: safeSubject.label,
-        emoji: safeSubject.emoji,
-        color: safeSubject.color,
-        showInParent: false
-    });
+    if (SUBJECTS.find(s => s.id === id)) { alert("Bu isimde bir ders zaten var."); return; }
+    SUBJECTS.push({ id, label, emoji, color, showInParent: false });
     setSaveStatus('Ders ekleniyor...', 'status-saving', true);
-    if (!await ClassLogData.saveSettings()) { setSaveStatus('Ders kaydı hatalı', 'status-error'); alert('Ders kaydedilemedi.'); return; }
+    if (!await ClassLogData.saveSettings()) { setSaveStatus('Ders kaydi hatali', 'status-error'); alert('Ders kaydedilemedi.'); return; }
     if (emojiInput) emojiInput.value = '';
     if (labelInput) labelInput.value = '';
     renderSubjectManager();
@@ -1823,17 +1913,13 @@ if (savePwBtn) savePwBtn.onclick = async () => {
 // ─── Veli HTML İndir ─────────────────────────────────────────────────────────
 const downloadParentBtn = document.getElementById('downloadParentBtn');
 if (downloadParentBtn) downloadParentBtn.onclick = async function() {
-    if (!isParentHtmlDownloadEnabled()) {
-        alert('Veli HTML indirme özelliği token sızıntısı riskinden dolayı kapalı.');
-        return;
-    }
     const original = this.textContent;
     this.textContent = 'Hazırlanıyor...';
     this.disabled = true;
     try {
-        const linkCode = await ClassLogData.ensureParentLink(ClassLogData.currentClass);
-        if (!linkCode) throw new Error('Veli linki oluşturulamadı.');
-        const url = `${window.location.origin}${window.location.pathname.replace('admin.html','parent.html')}?link=${encodeURIComponent(linkCode)}`;
+        const token = await ClassLogData.ensureParentToken(ClassLogData.currentClass);
+        if (!token) throw new Error('Veli linki olusturulamadi.');
+        const url = `${window.location.origin}${window.location.pathname.replace('admin.html','parent.html')}?id=${encodeURIComponent(token)}`;
         const html = buildParentRedirectHTML(ClassLogData.currentClass, url);
         const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
         const link = Object.assign(document.createElement('a'), {
@@ -1884,19 +1970,94 @@ let _adminBaseChannel = null;
 let _adminSubjectChannel = null;
 let _adminGlobalChannel = null;
 let _adminLocalRealtimeCleanup = null;
+let _adminPollTimer = null;
+let _adminRefreshInFlight = false;
+let _adminRealtimeReconnectTimer = null;
+let _adminRealtimeWatchdogTimer = null;
+let _realtimeWakeListenersBound = false;
+
+function getCurrentViewSnapshot() {
+    const date = currentDateInput?.value || '';
+    return {
+        className: ClassLogData.currentClass,
+        subjectId: ClassLogData.currentSubject,
+        tab: adminTab,
+        date,
+        students: [...students],
+        notesSignature: JSON.stringify(notes || {}),
+        rowData: cloneDataValue(adminTab === 'homework' ? (records[date] || {}) : (classRecords[date] || {}))
+    };
+}
+
+function diffChangedStudents(beforeRow = {}, afterRow = {}) {
+    const keys = new Set([...Object.keys(beforeRow || {}), ...Object.keys(afterRow || {})]);
+    const changed = [];
+    keys.forEach(studentName => {
+        if (JSON.stringify(beforeRow?.[studentName]) !== JSON.stringify(afterRow?.[studentName])) {
+            changed.push(studentName);
+        }
+    });
+    return changed;
+}
+
+async function refreshAdminView(forceRender = false, hintedStudents = []) {
+    if (_adminRefreshInFlight || _isApplyingLocalMark) return;
+    _adminRefreshInFlight = true;
+    try {
+        const before = getCurrentViewSnapshot();
+        const ok = await ClassLogData.sync();
+        if (!ok) return;
+        await loadData();
+        const after = getCurrentViewSnapshot();
+
+        const needsFullRender =
+            forceRender ||
+            before.className !== after.className ||
+            before.subjectId !== after.subjectId ||
+            before.tab !== after.tab ||
+            before.date !== after.date ||
+            JSON.stringify(before.students) !== JSON.stringify(after.students) ||
+            before.notesSignature !== after.notesSignature;
+
+        if (needsFullRender) {
+            renderStudents();
+            renderMarkingInfo();
+            renderKioskContextInfo();
+            return;
+        }
+
+        const changedStudents = hintedStudents.length
+            ? hintedStudents.filter(studentName => JSON.stringify(before.rowData?.[studentName]) !== JSON.stringify(after.rowData?.[studentName]))
+            : diffChangedStudents(before.rowData, after.rowData);
+
+        if (!changedStudents.length) return;
+
+        changedStudents.forEach(studentName => {
+            const status = adminTab === 'homework'
+                ? (records[after.date]?.[studentName])
+                : (classRecords[after.date]?.[studentName]);
+            updateCardButtons(studentName, status);
+        });
+    } finally {
+        _adminRefreshInFlight = false;
+    }
+}
 
 function setupAdminRealtime() {
     if (_adminBaseChannel) { _supabase.removeChannel(_adminBaseChannel); _adminBaseChannel = null; }
     if (_adminSubjectChannel) { _supabase.removeChannel(_adminSubjectChannel); _adminSubjectChannel = null; }
     if (_adminGlobalChannel) { _supabase.removeChannel(_adminGlobalChannel); _adminGlobalChannel = null; }
     if (_adminLocalRealtimeCleanup) { _adminLocalRealtimeCleanup(); _adminLocalRealtimeCleanup = null; }
+    if (_adminPollTimer) { clearInterval(_adminPollTimer); _adminPollTimer = null; }
+    if (_adminRealtimeWatchdogTimer) { clearTimeout(_adminRealtimeWatchdogTimer); _adminRealtimeWatchdogTimer = null; }
+    _connectRealtimeSocket();
     _adminRealtimeFlags = { base: 'idle', subject: 'idle', global: 'idle', local: 'idle' };
     setRealtimeFlag('base', 'CONNECTING');
     setRealtimeFlag('subject', 'CONNECTING');
     setRealtimeFlag('global', 'CONNECTING');
     // Arşiv görüntülemede realtime gereksiz
     if (ClassLogData.viewingTermId !== null && ClassLogData.viewingTermId !== ClassLogData.activeTermId) {
-        setBadgeState(realtimeStatusBadge, 'Realtime: arşiv modunda kapalı', 'status-muted');
+        setBadgeState(realtimeStatusBadge, 'Canlı senkron arşivde kapalı', 'status-muted');
         return;
     }
 
@@ -1905,25 +2066,17 @@ function setupAdminRealtime() {
 
     const handler = async (source = 'remote', payload = {}) => {
         if (_isApplyingLocalMark) return;
-        if (payload?.clientId && payload.clientId === window.CLASSLOG_CLIENT_ID) return;
+        if (payload?.runtimeId && payload.runtimeId === window.CLASSLOG_RUNTIME_ID) return;
         markRealtimeEvent(source);
-        const oldLen = students.length;
-        await ClassLogData.sync();
-        await loadData();
+        const payloadStudents = Array.isArray(payload?.students) ? payload.students : [];
+        await refreshAdminView(false, payloadStudents);
         const payloadDate = payload?.date || null;
         const payloadView = payload?.view || null;
-        const payloadStudents = Array.isArray(payload?.students) ? payload.students : [];
         const canPatchRows =
-            students.length === oldLen &&
             payloadDate &&
             payloadView === adminTab &&
             currentDateInput?.value === payloadDate &&
             payloadStudents.length > 0;
-
-        if (students.length !== oldLen) {
-            renderStudents();
-            return;
-        }
 
         if (canPatchRows) {
             payloadStudents.forEach(studentName => {
@@ -1942,20 +2095,37 @@ function setupAdminRealtime() {
         });
     };
 
+    const onRealtimeStatus = (key, status) => {
+        setRealtimeFlag(key, status);
+        if (status === 'SUBSCRIBED') {
+            if (_adminRealtimeReconnectTimer) {
+                clearTimeout(_adminRealtimeReconnectTimer);
+                _adminRealtimeReconnectTimer = null;
+            }
+            if (_adminRealtimeWatchdogTimer) {
+                clearTimeout(_adminRealtimeWatchdogTimer);
+                _adminRealtimeWatchdogTimer = null;
+            }
+        }
+        if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) {
+            scheduleAdminRealtimeReconnect();
+        }
+    };
+
     _adminBaseChannel = _supabase
         .channel(_adminSyncChannelName(baseId))
         .on('broadcast', { event: 'refresh' }, payload => handler('base', payload?.payload || {}))
-        .subscribe(status => setRealtimeFlag('base', status));
+        .subscribe(status => onRealtimeStatus('base', status));
 
     _adminSubjectChannel = _supabase
         .channel(_adminSyncChannelName(subjId))
         .on('broadcast', { event: 'refresh' }, payload => handler('subject', payload?.payload || {}))
-        .subscribe(status => setRealtimeFlag('subject', status));
+        .subscribe(status => onRealtimeStatus('subject', status));
 
     _adminGlobalChannel = _supabase
         .channel(CLASSLOG_TEACHER_GLOBAL_CHANNEL)
         .on('broadcast', { event: 'refresh' }, payload => handler('global', payload?.payload || {}))
-        .subscribe(status => setRealtimeFlag('global', status));
+        .subscribe(status => onRealtimeStatus('global', status));
 
     _adminLocalRealtimeCleanup = _listenLocalRealtime(CLASSLOG_LOCAL_TEACHER_EVENT, payload => {
         if (!payload) return;
@@ -1966,6 +2136,49 @@ function setupAdminRealtime() {
         setRealtimeFlag('local', 'SUBSCRIBED');
         void handler('local', payload);
     });
+
+    _adminPollTimer = setInterval(() => {
+        if (document.hidden) return;
+        void refreshAdminView(false);
+    }, 2500);
+
+    _adminRealtimeWatchdogTimer = setTimeout(() => {
+        const values = Object.values(_adminRealtimeFlags);
+        const anyLive = values.some(value => value === 'SUBSCRIBED');
+        if (!anyLive) scheduleAdminRealtimeReconnect(250);
+    }, 6500);
+}
+
+function scheduleAdminRealtimeReconnect(delay = 1400) {
+    if (_urlMode === 'board') return;
+    if (_adminRealtimeReconnectTimer) return;
+    _adminRealtimeReconnectTimer = setTimeout(() => {
+        _adminRealtimeReconnectTimer = null;
+        void _restartRealtimeSocket();
+        setupAdminRealtime();
+    }, delay);
+}
+
+function bindRealtimeWakeListeners() {
+    if (_realtimeWakeListenersBound) return;
+    _realtimeWakeListenersBound = true;
+
+    window.addEventListener('online', () => {
+        if (_urlMode === 'board') {
+            ensureBoardControlChannel(true);
+            return;
+        }
+        scheduleAdminRealtimeReconnect(350);
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) return;
+        if (_urlMode === 'board') {
+            ensureBoardControlChannel(true);
+            return;
+        }
+        scheduleAdminRealtimeReconnect(500);
+    });
 }
 
 // ─── Başlatma ─────────────────────────────────────────────────────────────────
@@ -1974,109 +2187,17 @@ async function loadData() {
     records      = cloneDataValue(ClassLogData.getRecords()) || {};
     classRecords = cloneDataValue(ClassLogData.getClassRecords()) || {};
     notes        = cloneDataValue(ClassLogData.getNotes()) || {};
-    renderSyncMeta();
-}
-
-async function saveParentNoticeFromAdmin() {
-    if (!parentNoticeInput) return;
-    if (!ClassLogAuth.isAdmin()) {
-        alert('Bu alanı yalnızca admin kullanabilir.');
-        return;
-    }
-    const text = parentNoticeInput.value.trim();
-    const duration = parentNoticeDuration?.value || '';
-    _parentNoticeDraftText = text;
-    _parentNoticeDraftDuration = duration;
-    if (text && !duration) {
-        alert('Veli uyarısı için bir süre seçin.');
-        return;
-    }
-    const expiresAt = text ? computeParentNoticeExpiry(duration) : null;
-    setSaveStatus('Veli uyarısı yayınlanıyor...', 'status-saving', true);
-    const ok = await ClassLogData.saveParentNotice({
-        className: ClassLogData.currentClass,
-        text,
-        expiresAt
-    });
-    if (!ok) {
-        setSaveStatus('Veli uyarısı hatası', 'status-error');
-        const fallbackMeta = text
-            ? 'Kaydetme başarısız oldu. Yazdığınız metin korunuyor; SQL güncellemesini kontrol edin.'
-            : 'Kaldırma başarısız oldu.';
-        if (parentNoticeMeta) parentNoticeMeta.textContent = fallbackMeta;
-        alert(getDataErrorMessage('Veli uyarısı kaydedilemedi.'));
-        return;
-    }
     renderParentNoticeAdminBar();
     renderSyncMeta();
-    _parentNoticeDraftText = text;
-    _parentNoticeDraftDuration = '';
-    setSaveStatus(text ? 'Veli uyarısı yayında' : 'Veli uyarısı kaldırıldı', 'status-ok');
-}
-
-async function saveParentPopupFromAdmin() {
-    if (!parentPopupInput) return;
-    const text = parentPopupInput.value.trim();
-    const duration = parentPopupDuration.value;
-    
-    if (text && !duration) {
-        alert('Pop-up mesajı için bir süre seçin.');
-        return;
-    }
-
-    const expiresAt = computeParentNoticeExpiry(duration);
-    setSaveStatus('Pop-up güncelleniyor...', 'status-working');
-
-    const ok = await ClassLogData.saveParentPopup({
-        className: ClassLogData.currentClass,
-        text,
-        expiresAt
-    });
-
-    if (!ok) {
-        setSaveStatus('Pop-up hatası', 'status-error');
-        alert(getDataErrorMessage('Pop-up mesajı kaydedilemedi.'));
-        return;
-    }
-
-    _parentPopupDraftText = '';
-    _parentPopupDraftDuration = '';
-    setSaveStatus('Pop-up yayında', 'status-ok');
-    renderParentNoticeAdminBar();
-}
-
-if (parentPopupInput) parentPopupInput.addEventListener('input', () => { _parentPopupDraftText = parentPopupInput.value; });
-if (parentPopupDuration) parentPopupDuration.addEventListener('change', () => { _parentPopupDraftDuration = parentPopupDuration.value; });
-if (saveParentPopupBtn) {
-    saveParentPopupBtn.onclick = async () => {
-        await saveParentPopupFromAdmin();
-    };
-}
-if (clearParentPopupBtn) {
-    clearParentPopupBtn.onclick = async () => {
-        if (parentPopupInput) parentPopupInput.value = '';
-        if (parentPopupDuration) parentPopupDuration.value = '';
-        await saveParentPopupFromAdmin();
-    };
-}
-if (saveParentNoticeBtn) {
-    saveParentNoticeBtn.onclick = async () => {
-        await saveParentNoticeFromAdmin();
-    };
-}
-if (clearParentNoticeBtn) {
-    clearParentNoticeBtn.onclick = async () => {
-        if (parentNoticeInput) parentNoticeInput.value = '';
-        if (parentNoticeDuration) parentNoticeDuration.value = '';
-        await saveParentNoticeFromAdmin();
-    };
 }
 
 async function init() {
+    bindRealtimeWakeListeners();
     if (!ClassLogAuth.isKioskSession()) {
         await ClassLogData.syncSettings();
     }
     if (sessionStorage.getItem('cl_kiosk')) applyKioskContext(readKioskContext());
+    applySavedAdminUiState();
 
     const teacher = ClassLogAuth.getTeacher();
     const allowedClasses = teacher?.classes?.length
@@ -2109,17 +2230,23 @@ async function init() {
     renderMarkingInfo();
     renderStudents();
     _updateTermBanner();
+    persistAdminUiState();
     persistKioskContext();
+    if (sessionStorage.getItem('cl_kiosk')) startBoardPolling();
     setupAdminRealtime();
-    renderParentNoticeAdminBar();
 }
 
 // ─── Board Modu: Akıllı Tahta Bekleme Ekranı ─────────────────────────────────
 let _boardControlChannel = null;
+let _boardControlReconnectTimer = null;
+let _boardControlWatchdogTimer = null;
 
 function showBoardWaitingState() {
     stopBoardCodeLoop();
+    stopBoardPresenceSync();
     sessionStorage.removeItem('cl_board_target_code');
+    _boardLastCommandId = null;
+    _boardLastProcessedCommandId = null;
     const overlay = document.getElementById('loginOverlay');
     if (overlay) overlay.style.display = 'none';
 
@@ -2139,10 +2266,16 @@ function showBoardWaitingState() {
 }
 
 function handleBoardUnlock(payload = {}) {
-    const { token, teacher, context, expiresAt, sessionKind, boardCode } = payload;
+    const { token, teacher, context, expiresAt, sessionKind, boardCode, commandId, parentToken } = payload;
+    if (commandId && String(commandId) === String(_boardLastProcessedCommandId)) return;
     if (!token) return;
     if (!/^\d{6}$/.test(normalizeBoardCode(boardCode))) return;
     if (normalizeBoardCode(boardCode) !== normalizeBoardCode(_boardCurrentCode)) return;
+    if (commandId) _boardLastProcessedCommandId = commandId;
+    const mergedContext = {
+        ...(context || {}),
+        parentToken: parentToken || context?.parentToken || sessionStorage.getItem('cl_kiosk_parent_token') || null
+    };
 
     const teacherObj = typeof teacher === 'object' ? teacher : JSON.parse(teacher || '{}');
     const safeTeacher = sessionKind === 'kiosk'
@@ -2158,9 +2291,11 @@ function handleBoardUnlock(payload = {}) {
     sessionStorage.setItem('cl_teacher', JSON.stringify(safeTeacher));
     sessionStorage.setItem('cl_session_kind', sessionKind || 'kiosk');
     sessionStorage.setItem('cl_board_target_code', normalizeBoardCode(boardCode));
-    applyKioskContext(context);
+    if (mergedContext.parentToken) sessionStorage.setItem('cl_kiosk_parent_token', mergedContext.parentToken);
+    applyKioskContext(mergedContext);
     stopBoardCodeLoop();
-    startKioskTimer({ expiresAt, context });
+    startBoardPolling();
+    startKioskTimer({ expiresAt, context: mergedContext });
     renderKioskContextInfo();
 
     const statusText = document.getElementById('boardStatusText');
@@ -2179,37 +2314,74 @@ function handleBoardUnlock(payload = {}) {
 }
 
 function handleBoardLock(payload = {}) {
+    const { commandId } = payload || {};
+    if (commandId && String(commandId) === String(_boardLastProcessedCommandId)) return;
     const incomingCode = normalizeBoardCode(payload.boardCode || '');
     const activeCode = normalizeBoardCode(sessionStorage.getItem('cl_board_target_code') || '');
     const waitingCode = normalizeBoardCode(_boardCurrentCode);
     if (incomingCode && incomingCode !== activeCode && incomingCode !== waitingCode) return;
     if (!sessionStorage.getItem('cl_kiosk') && incomingCode !== waitingCode) return;
+    if (commandId) _boardLastProcessedCommandId = commandId;
     const statusText = document.getElementById('boardStatusText');
     if (statusText) statusText.textContent = 'Tahta kapatıldı. Bekleme ekranına dönülüyor...';
     void closeKioskSession();
 }
 
-function ensureBoardControlChannel() {
+function scheduleBoardControlReconnect(delay = 1400) {
+    if (_boardControlReconnectTimer) return;
+    _boardControlReconnectTimer = setTimeout(() => {
+        _boardControlReconnectTimer = null;
+        void _restartRealtimeSocket();
+        ensureBoardControlChannel(true);
+    }, delay);
+}
+
+function ensureBoardControlChannel(forceReconnect = false) {
+    if (forceReconnect && _boardControlChannel) {
+        try { _supabase.removeChannel(_boardControlChannel); } catch (error) {}
+        _boardControlChannel = null;
+    }
+    if (_boardControlWatchdogTimer) {
+        clearTimeout(_boardControlWatchdogTimer);
+        _boardControlWatchdogTimer = null;
+    }
     if (_boardControlChannel) return _boardControlChannel;
 
-    _boardControlChannel = _supabase.channel(CLASSLOG_BOARD_CHANNEL);
-    _boardControlChannel
+    _connectRealtimeSocket();
+    const channel = _supabase.channel(CLASSLOG_BOARD_CHANNEL);
+    channel
         .on('broadcast', { event: 'unlock' }, payload => handleBoardUnlock(payload.payload || {}))
         .on('broadcast', { event: 'lock' }, payload => handleBoardLock(payload.payload || {}))
-        .subscribe();
+        .subscribe(status => {
+            if (status === 'SUBSCRIBED') {
+                if (_boardControlReconnectTimer) {
+                    clearTimeout(_boardControlReconnectTimer);
+                    _boardControlReconnectTimer = null;
+                }
+                if (_boardControlWatchdogTimer) {
+                    clearTimeout(_boardControlWatchdogTimer);
+                    _boardControlWatchdogTimer = null;
+                }
+            }
+            if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) {
+                if (_boardControlChannel === channel) _boardControlChannel = null;
+                scheduleBoardControlReconnect();
+            }
+        });
 
+    _boardControlChannel = channel;
+    _boardControlWatchdogTimer = setTimeout(() => {
+        if (_boardControlChannel === channel) {
+            ensureBoardControlChannel(true);
+        }
+    }, 6500);
     return _boardControlChannel;
 }
 
 function initBoardMode() {
-    if (!isSecureBoardPairingEnabled()) {
-        renderSecurityLockScreen(
-            'Tahta modu kapalı',
-            'Bu deploy güvenli board kanalı ayarları olmadan tahta modunu açmaz.'
-        );
-        return;
-    }
+    bindRealtimeWakeListeners();
     showBoardWaitingState();
+    startBoardPolling();
     ensureBoardControlChannel();
 }
 
@@ -2241,13 +2413,6 @@ function initBoardMode() {
 
     // ── Auth request: telefon kamera QR tarattı ──────────────────────────────
     if (_authReqParam) {
-        if (!isSecureBoardPairingEnabled()) {
-            renderSecurityLockScreen(
-                'Tahta eşleştirme kapalı',
-                'Bu deploy güvenlik nedeniyle QR ile tahta açma özelliğini kullanmıyor.'
-            );
-            return;
-        }
         if (ClassLogAuth.isLoggedIn()) {
             // Zaten giriş yapılmış (aynı sekmede) → direkt gönder
             await handleRemoteAuthIfNeeded();
@@ -2272,3 +2437,4 @@ function initBoardMode() {
         init();
     }
 })();
+

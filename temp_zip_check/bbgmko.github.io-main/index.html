@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>ClassLog Pro | Giriş</title>
+    <link rel="manifest" href="manifest.json?v=2">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="shortcut icon" href="favicon.svg">
+    <meta name="theme-color" content="#060A14">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ClassLog Pro">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="style.css?v=4">
+    <style>
+        body.admin-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+        .choice-container { background: var(--a-surface); padding: 44px 40px; border-radius: 30px; border: 1px solid var(--a-border); max-width: 480px; width: 100%; text-align: center; box-shadow: 0 32px 64px rgba(0,0,0,0.5); animation: slide-in 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+        .school-intro { font-size: 0.8rem; color: var(--a-muted2); margin-bottom: 8px; letter-spacing: 0.5px; }
+        .choice-desc  { color: var(--a-muted2); font-size: 0.88rem; margin-bottom: 36px; line-height: 1.5; }
+        .choice-btn   { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 18px 24px; margin: 12px 0; border-radius: 16px; text-decoration: none; color: white; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 1rem; transition: var(--transition); position: relative; overflow: hidden; }
+        .choice-btn::after { content:''; position:absolute; inset:0; background:white; opacity:0; transition:0.2s; }
+        .choice-btn:hover::after { opacity: 0.07; }
+        .choice-btn:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(0,0,0,0.35); }
+        .btn-admin  { background: linear-gradient(135deg, #6366F1, #818CF8); box-shadow: 0 6px 20px rgba(99,102,241,0.35); }
+        .btn-parent { background: linear-gradient(135deg, #059669, #34D399); box-shadow: 0 6px 20px rgba(16,185,129,0.3); }
+        .divider    { display:flex; align-items:center; gap:12px; color:var(--a-muted); font-size:0.75rem; margin:4px 0; }
+        .divider::before,.divider::after { content:''; flex:1; height:1px; background:var(--a-border2); }
+        #installBanner { display:none; position:fixed; bottom:0; left:0; right:0; background:linear-gradient(135deg,#6366F1,#818CF8); color:white; padding:14px 20px; align-items:center; gap:12px; z-index:9999; box-shadow:0 -4px 20px rgba(0,0,0,.3); }
+        #installBanner.show { display:flex; animation:slide-up .3s ease-out; }
+        @keyframes slide-up { from{transform:translateY(100%)} to{transform:translateY(0)} }
+    </style>
+</head>
+<body class="admin-page">
+    <div class="choice-container">
+        <p class="school-intro">🏛️ Büyükşehir Belediyesi Gazi Mustafa Kemal Ortaokulu</p>
+        <h1 style="font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:800;background:linear-gradient(135deg,#F1F5FF,#818CF8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px;">Ödev Takip Sistemi</h1>
+        <p class="choice-desc">Lütfen giriş yapmak istediğiniz paneli seçiniz.</p>
+        <a href="admin.html" class="choice-btn btn-admin"><span>👨‍🏫</span> Öğretmen Paneli</a>
+        <div class="divider">veya</div>
+        <a href="parent.html" class="choice-btn btn-parent"><span>👨‍👩‍👧</span> Veli Dashboard</a>
+        <p style="margin-top:24px;font-size:.72rem;color:var(--a-muted2);" id="pwaHint"></p>
+    </div>
+
+    <div id="installBanner">
+        <div style="flex:1;">
+            <div style="font-weight:700;font-size:.9rem;">📲 Uygulamayı Yükle</div>
+            <div style="font-size:.75rem;opacity:.8;">Ana ekrana ekle — internet olmadan da çalışır</div>
+        </div>
+        <button id="installBtn" style="background:white;color:#6366F1;border:none;padding:8px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:.85rem;">Yükle</button>
+        <button onclick="document.getElementById('installBanner').classList.remove('show')" style="background:transparent;border:none;color:rgba(255,255,255,.7);font-size:1.4rem;cursor:pointer;padding:0 4px;">×</button>
+    </div>
+
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+
+    let _deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', e => {
+        e.preventDefault();
+        _deferredPrompt = e;
+        document.getElementById('installBanner').classList.add('show');
+        document.getElementById('pwaHint').textContent = '📱 Bu uygulamayı Android telefonunuza yükleyebilirsiniz.';
+    });
+
+    document.getElementById('installBtn').onclick = async () => {
+        if (!_deferredPrompt) return;
+        _deferredPrompt.prompt();
+        const { outcome } = await _deferredPrompt.userChoice;
+        _deferredPrompt = null;
+        document.getElementById('installBanner').classList.remove('show');
+        if (outcome === 'accepted') {
+            document.getElementById('pwaHint').textContent = '✅ Uygulama ana ekrana eklendi!';
+        }
+    };
+
+    window.addEventListener('appinstalled', () => {
+        document.getElementById('installBanner').classList.remove('show');
+    });
+    </script>
+</body>
+</html>

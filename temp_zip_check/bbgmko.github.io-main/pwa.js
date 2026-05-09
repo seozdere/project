@@ -1,5 +1,6 @@
 (function () {
     if (typeof window === 'undefined') return;
+    window.CLASSLOG_RELEASE = 'stable-2026-04-18';
 
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js').catch(() => {});

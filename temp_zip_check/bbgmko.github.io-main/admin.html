@@ -1,0 +1,544 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>ClassLog Pro | Öğretmen Paneli</title>
+    <link rel="manifest" href="manifest.json?v=2">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="shortcut icon" href="favicon.svg">
+    <meta name="theme-color" content="#060A14">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ClassLog Pro">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="style.css?v=5">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.99.3"></script>
+    <style>
+        /* ── Kiosk Modu Banner ────────────────────────────────────────────────── */
+        #kioskBanner {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            background: linear-gradient(90deg, #7C3AED, #6366F1);
+            color: #fff;
+            padding: 10px 20px;
+            font-size: .85rem;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid rgba(255,255,255,.15);
+            box-shadow: 0 4px 20px rgba(99,102,241,.4);
+        }
+        #kioskBanner .kiosk-left  { display:flex;align-items:center;gap:10px; }
+        #kioskBanner .kiosk-pulse {
+            width:10px;height:10px;border-radius:50%;background:#4ADE80;
+            box-shadow:0 0 0 0 rgba(74,222,128,.5);
+            animation: kpulse 1.4s infinite;
+        }
+        @keyframes kpulse {
+            0%   { box-shadow: 0 0 0 0 rgba(74,222,128,.5); }
+            70%  { box-shadow: 0 0 0 8px transparent; }
+            100% { box-shadow: 0 0 0 0 transparent; }
+        }
+        #kioskBanner button {
+            background: rgba(255,255,255,.15);
+            border: 1px solid rgba(255,255,255,.3);
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: .82rem;
+            font-weight: 600;
+            transition: background .2s;
+        }
+        #kioskBanner button:hover { background: rgba(255,255,255,.25); }
+        #closeBoardBtn {
+            background: linear-gradient(135deg, #f97316, #ef4444);
+            border: 1px solid rgba(255,255,255,.18);
+            color: #fff;
+            box-shadow: 0 8px 18px rgba(239, 68, 68, .28);
+            font-weight: 800;
+        }
+        #closeBoardBtn:hover {
+            background: linear-gradient(135deg, #fb923c, #dc2626);
+            box-shadow: 0 10px 22px rgba(239, 68, 68, .35);
+        }
+        #kioskCountdown {
+            font-size: 1rem;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: .04em;
+            color: #4ADE80;
+            min-width: 52px;
+            text-align: right;
+        }
+
+        /* ── Term Archive Banner ────────────────────────────────────────────── */
+        #termViewBanner {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            background: linear-gradient(90deg, #B45309, #D97706);
+            color: #fff;
+            padding: 9px 20px;
+            font-size: .84rem;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 99;
+            border-bottom: 1px solid rgba(255,255,255,.2);
+            box-shadow: 0 4px 16px rgba(180,83,9,.4);
+        }
+        #termViewBanner button {
+            background: rgba(255,255,255,.18);
+            border: 1px solid rgba(255,255,255,.35);
+            color: #fff;
+            padding: 5px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: .8rem;
+            font-weight: 600;
+        }
+        #termViewBanner button:hover { background: rgba(255,255,255,.28); }
+        /* Arşiv modunda düzenleme engelleme */
+        body.viewing-archive .controls,
+        body.viewing-archive .note-btn,
+        body.viewing-archive #manageStudentsBtn,
+        body.viewing-archive #exportBtn { pointer-events:none; opacity:.45; }
+
+        /* ── Admin Identity Box ─────────────────────────────────────────────── */
+        .admin-identity {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: linear-gradient(135deg,rgba(129,140,248,.18),rgba(56,189,248,.12));
+            border: 1px solid rgba(129,140,248,.4);
+            border-radius: 10px; padding: 5px 12px;
+            font-size: .8rem; font-weight: 700; color: var(--a-accent);
+        }
+        .teacher-identity {
+            font-size: .8rem; color: var(--a-muted2);
+        }
+        #qrInfo { margin-top: 8px; }
+        #qrCountdown {
+            font-size: .85rem;
+            font-weight: 600;
+            color: var(--a-accent);
+            margin-top: 4px;
+        }
+
+        /* ── Board Mode Screen ──────────────────────────────────────────────── */
+        #boardScreen {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(ellipse 80% 70% at 50% 0%, rgba(99,102,241,.18) 0%, transparent 60%),
+                        linear-gradient(135deg, #040812 0%, #060E1C 50%, #0A1628 100%);
+            z-index: 10001;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 0;
+            text-align: center;
+            padding: 40px 24px;
+            overflow: hidden;
+        }
+        #boardScreen::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none'%3E%3Cg fill='%236366f1' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            pointer-events: none;
+        }
+        .board-logo    { font-size: 3.5rem; margin-bottom: 8px; position: relative; z-index: 1; }
+        .board-school  { font-size: .82rem; color: rgba(255,255,255,.45); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; position: relative; z-index: 1; }
+        .board-title   { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800;
+                         background: linear-gradient(135deg, #F1F5FF 0%, #818CF8 100%);
+                         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+                         background-clip: text; margin-bottom: 24px; position: relative; z-index: 1; }
+        .board-qr-wrap { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+                         border-radius: 24px; padding: 20px; margin-bottom: 24px;
+                         backdrop-filter: blur(8px); position: relative; z-index: 1; }
+        .board-qr-wrap img { width: 280px; height: 280px; border-radius: 12px; display: block; }
+        .board-instruction { font-size: .9rem; color: rgba(255,255,255,.6); line-height: 1.7; max-width: 380px; position: relative; z-index: 1; }
+        .board-instruction strong { color: rgba(255,255,255,.9); }
+        .board-pulse-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+                           background: #4ade80; margin-right: 8px;
+                           box-shadow: 0 0 0 0 rgba(74,222,128,.5);
+                           animation: bpulse 1.6s infinite; }
+        @keyframes bpulse {
+            0%   { box-shadow: 0 0 0 0 rgba(74,222,128,.5); }
+            70%  { box-shadow: 0 0 0 10px transparent; }
+            100% { box-shadow: 0 0 0 0 transparent; }
+        }
+        .board-status  { display: flex; align-items: center; justify-content: center;
+                         margin-top: 20px; font-size: .82rem; color: #4ade80; font-weight: 600;
+                         position: relative; z-index: 1; }
+    </style>
+</head>
+<body class="admin-page">
+
+    <!-- ── Kiosk Modu Banner ─────────────────────────────────────────────── -->
+    <div id="kioskBanner">
+        <div class="kiosk-left">
+            <div class="kiosk-pulse"></div>
+            <span>🔐 Kiosk Modu</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;margin-left:auto;">
+            <span id="kioskContextInfo" style="display:none;font-size:.82rem;opacity:.92;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.16);"></span>
+            <button id="kioskParentBtn" type="button" style="display:none;">👁️ Veli Görünümü</button>
+            <span style="font-size:.8rem;opacity:.8;">Kalan süre:</span>
+            <span id="kioskCountdown">15:00</span>
+            <button onclick="manualKioskLogout()">🚪 Kapat &amp; Çıkış</button>
+        </div>
+    </div>
+
+    <!-- ── Arşiv Dönemi Görüntüleme Banner ───────────────────────────────── -->
+    <div id="termViewBanner">
+        <div style="display:flex;align-items:center;gap:10px;">
+            <span>📦</span>
+            <span id="termBannerLabel">Arşiv Dönemi — Salt Okunur</span>
+        </div>
+        <button onclick="switchViewingTerm(null)">↩ Aktif Döneme Dön</button>
+    </div>
+
+    <!-- ── Giriş Ekranı ──────────────────────────────────────────────────── -->
+    <div id="loginOverlay">
+        <div class="login-card">
+            <span class="lock-icon">🔐</span>
+            <h2>Öğretmen Girişi</h2>
+            <p id="loginSubtitle">Büyükşehir Belediyesi Gazi Mustafa Kemal Ortaokulu</p>
+            <input type="text"     id="adminUsername" class="login-input" placeholder="Kullanıcı adı" autocomplete="username">
+            <input type="password" id="adminPassword" class="login-input" placeholder="Şifre"         autocomplete="current-password">
+            <button id="loginBtn" class="login-submit">Giriş Yap</button>
+            <p id="loginError" class="shake" style="visibility:hidden;">Hatalı şifre.</p>
+            <div id="kioskLoginHint" style="display:none;margin-top:12px;padding:10px;background:rgba(99,102,241,.12);border-radius:8px;font-size:.78rem;color:#a5b4fc;text-align:left;line-height:1.5;">
+                📱 <strong>Kiosk Modu</strong> — Giriş sonrası 15 dakika aktif olacak, ardından otomatik kapanacak.
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Tahta Modu Overlay ────────────────────────────────────────────── -->
+    <div id="boardModeOverlay" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width:400px;text-align:center;">
+            <h2>🖥️ Tahta Eşleştirme</h2>
+            <img id="boardQrImage" src="" alt="QR" style="width:250px;height:250px;margin:20px auto;">
+            <p style="font-size:.9rem;color:var(--a-muted2);">QR kodunu akıllı tahtadan okutun.</p>
+            <button onclick="document.getElementById('boardModeOverlay').style.display='none'" class="btn-action btn-action-neg">Kapat</button>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- ── Başlık ────────────────────────────────────────────────────── -->
+        <header>
+            <div class="admin-topbar">
+                <div class="admin-topbar-left">
+                    <div class="action-group context-group">
+                        <span class="badge">PRO</span>
+                        <select id="classSelector" title="Sınıf Seç"></select>
+                    </div>
+                    <div class="action-group quick-action-group">
+                        <button id="copyLinkBtn" class="tbtn tbtn-accent no-kiosk">📋 Link</button>
+                        <button id="qrBtn" class="tbtn tbtn-accent admin-only" title="Akıllı Tahta QR">🖥️ Tahta QR</button>
+                        <button id="downloadParentBtn" class="tbtn tbtn-accent no-kiosk">⬇️ Veli HTML</button>
+                        <button id="pushToBoardBtn" class="tbtn tbtn-accent no-kiosk" title="Telefon ile tahtayı aç">📱→🖥️ Tahtayı Aç</button>
+                        <button id="closeBoardBtn" class="tbtn no-kiosk" title="Tahtayı anında kapat">Tahtayı Kapat</button>
+                    </div>
+                    <div class="action-group admin-action-group admin-only no-kiosk">
+                        <button id="teacherMgrBtn" class="tbtn tbtn-accent" onclick="openTeacherManager()">👥 Öğretmenler</button>
+                        <button id="subjectMgrBtn" class="tbtn tbtn-accent" onclick="openSubjectManager()">⚙️ Ders Yönetimi</button>
+                        <button id="termMgrBtn" class="tbtn tbtn-accent" onclick="openTermManager()">📅 Dönem</button>
+                    </div>
+                </div>
+                <div class="session-action-group">
+                    <span id="teacherName" style="font-size:.8rem;color:var(--a-muted2);"></span>
+                    <button id="changePwBtn" class="tbtn tbtn-ghost" style="font-size:.72rem;padding:4px 9px;" title="Şifre Değiştir">🔒 Şifre</button>
+                    <button id="logoutBtn" onclick="performLogout()" class="tbtn tbtn-ghost">🚪 Çıkış</button>
+                    <a href="parent.html" id="viewToggle" class="tbtn no-kiosk" style="text-decoration:none;">👁️ Veli Görünümü</a>
+                </div>
+            </div>
+            <p class="subtitle">Büyükşehir Belediyesi Gazi Mustafa Kemal Ortaokulu — Öğretmen Paneli</p>
+            <div class="admin-status-strip">
+                <span id="saveStatusBadge" class="status-pill status-idle">Hazır</span>
+                <span id="realtimeStatusBadge" class="status-pill status-muted">Yedek senkron aktif</span>
+                <span id="syncMetaText" class="status-meta">Son eşitleme: —</span>
+            </div>
+
+            <!-- ── Ders Sekmeleri ─────────────────────────────────────────── -->
+            <div id="subjectTabs" class="subject-tabs"></div>
+
+            <!-- ── Mod Sekmeleri ─────────────────────────────────────────── -->
+            <div class="admin-tabs" style="margin-top:10px;">
+                <button class="admin-tab active" id="tabHomework" onclick="switchAdminTab('homework')">📚 Ödev Takip</button>
+                <button class="admin-tab"        id="tabClass"    onclick="switchAdminTab('class')">⚡ Ders İçi Performans</button>
+            </div>
+            <div id="markingInfoBar" style="margin-top:12px;padding:12px 14px;border-radius:14px;background:rgba(59,130,246,.10);border:1px solid rgba(96,165,250,.18);color:#cfe3ff;font-size:.82rem;line-height:1.6;">
+                İşaret açıklamaları yükleniyor...
+            </div>
+            <div id="parentNoticeAdminBar" class="admin-only no-kiosk" style="margin-top:12px;padding:12px 14px;border-radius:14px;background:rgba(249,115,22,.10);border:1px solid rgba(251,146,60,.22);display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+                <span style="font-size:.8rem;font-weight:800;color:#fdba74;">📣 Veli Uyarı Barı</span>
+                <input id="parentNoticeInput" type="text" maxlength="180" placeholder="Veli ekranında görünecek kısa duyuru..." style="flex:1 1 280px;min-width:220px;background:rgba(15,23,42,.55);border:1px solid rgba(148,163,184,.24);border-radius:10px;padding:10px 12px;color:#f8fafc;font-size:.82rem;">
+                <select id="parentNoticeDuration" style="background:rgba(15,23,42,.55);border:1px solid rgba(148,163,184,.24);border-radius:10px;padding:10px 12px;color:#f8fafc;font-size:.82rem;">
+                    <option value="">Süre seç</option>
+                    <option value="15">15 dk</option>
+                    <option value="30">30 dk</option>
+                    <option value="60">1 saat</option>
+                    <option value="180">3 saat</option>
+                    <option value="1440">1 gün</option>
+                    <option value="4320">3 gün</option>
+                    <option value="10080">1 hafta</option>
+                    <option value="eod">Bugün sonuna kadar</option>
+                </select>
+                <button id="saveParentNoticeBtn" type="button" class="tbtn tbtn-accent" style="padding:9px 14px;">Yayınla</button>
+                <button id="clearParentNoticeBtn" type="button" class="tbtn tbtn-ghost" style="padding:9px 14px;">Kaldır</button>
+                <span id="parentNoticeMeta" style="font-size:.76rem;color:#fed7aa;opacity:.95;"></span>
+            </div>
+        </header>
+
+        <!-- ── Ana İçerik ───────────────────────────────────────────────── -->
+        <main>
+            <div style="text-align:center; margin-bottom:28px;">
+                <div class="date-selector">
+                    <button id="prevDate" class="date-nav-btn">‹</button>
+                    <input type="date" id="currentDate">
+                    <button id="nextDate" class="date-nav-btn">›</button>
+                </div>
+                <div class="bulk-action-row" style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:14px;">
+                    <button id="bulkPosBtn" class="tbtn tbtn-accent" onclick="bulkSetMark(1)">Tümüne +</button>
+                    <button id="bulkNegBtn" class="tbtn" onclick="bulkSetMark(-1)">Tümüne −</button>
+                    <button id="bulkClearBtn" class="tbtn tbtn-ghost" onclick="bulkClearMarks()">Tümünü Sıfırla</button>
+                </div>
+            </div>
+            <div id="studentList" class="student-list"></div>
+        </main>
+
+        <!-- ── Hızlı Eylemler ─────────────────────────────────────────── -->
+        <div class="dashboard-actions">
+            <button class="action-btn admin-only" id="manageStudentsBtn" title="Öğrencileri Yönet"
+                    style="background:linear-gradient(135deg,#6366F1,#818CF8);">👥</button>
+            <button class="action-btn" id="exportBtn" title="CSV Olarak İndir"
+                    style="background:linear-gradient(135deg,#059669,#34D399);">📊</button>
+        </div>
+    </div>
+
+    <!-- ── Öğrenci Yönetim Modalı ───────────────────────────────────────── -->
+    <div id="manageModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Öğrenci Yönetimi</h2>
+                <button id="closeManageModal" class="btn-action btn-action-neg"
+                        style="width:auto;padding:0 20px;height:40px;border-radius:10px;">Kapat</button>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                <p class="modal-desc" style="margin-bottom:0; font-size:0.85rem;">Excel'den kopya edip yapıştırın (satır satır):</p>
+            </div>
+            <textarea id="bulkInput" placeholder="Örn:&#10;Ahmet Yılmaz&#10;Ayşe Demir&#10;Burak Kaya"></textarea>
+            <button id="saveStudentsBtn" class="btn-action btn-action-pos">✓ Öğrenci Listesini Güncelle</button>
+        </div>
+    </div>
+
+    <!-- ── Veli Notu Modalı ─────────────────────────────────────────────── -->
+    <div id="noteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+            <h2>✏️ Veli Notu</h2>
+                <button id="closeNoteModal" class="btn-action btn-action-neg"
+                        style="width:auto;padding:0 20px;height:40px;border-radius:10px;">Kapat</button>
+            </div>
+            <p class="modal-desc" id="noteModalDesc">Bu öğrenciye veli portalında görünecek bir not bırakın.</p>
+            <textarea id="noteInput" placeholder="Örn: Bugün sınıfta harika bir katkı sağladı..."></textarea>
+            <button id="saveNoteBtn" class="btn-action btn-action-pos">💾 Notu Kaydet</button>
+        </div>
+    </div>
+
+    <!-- ── Akıllı Tahta QR Modalı ────────────────────────────────────────── -->
+    <div id="qrModal" class="modal" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-content" style="max-width:440px;text-align:center;">
+            <div class="modal-header">
+            <h2 id="qrClassLabel">🖥️ Akıllı Tahta QR Kodu</h2>
+                <button onclick="document.getElementById('qrModal').style.display='none'"
+                        class="btn-action btn-action-neg" style="width:auto;padding:0 16px;height:36px;border-radius:10px;font-size:.8rem;">✕</button>
+            </div>
+            <p style="font-size:.82rem;color:var(--a-muted2);margin-bottom:14px;line-height:1.5;">
+                Bu QR <strong>sabittir</strong> — Tahtada her zaman bırakabilirsiniz.<br>
+                Yalnızca şifrenizi bilen kişi giriş yapabilir.
+            </p>
+            <img id="qrImage" src="" alt="QR" style="width:300px;height:300px;border-radius:14px;border:2px solid var(--a-border);margin:0 auto 12px;display:block;">
+            <div id="qrCountdown" style="font-size:.85rem;font-weight:600;margin-bottom:8px;color:var(--a-accent);">⏳ QR yükleniyor...</div>
+            <div id="qrInfo"></div>
+        </div>
+    </div>
+
+    <!-- ── Öğretmen Yönetimi Modalı (Admin only) ───────────────────────── -->
+    <div id="teacherModal" class="modal">
+        <div class="modal-content" style="max-width:640px;">
+            <div class="modal-header">
+                <h2>👥 Öğretmen Yönetimi</h2>
+                <button id="closeTeacherModal" class="btn-action btn-action-neg"
+                        style="width:auto;padding:0 20px;height:40px;border-radius:10px;">Kapat</button>
+            </div>
+            <p class="modal-desc">Sisteme kayıtlı öğretmenleri yönetin. Her öğretmen yalnızca kendi sınıflarına erişebilir.</p>
+            <button id="addTeacherBtn" class="btn-action btn-action-pos" style="height:40px;margin-bottom:16px;">+ Yeni Öğretmen Ekle</button>
+            <div id="teacherList"></div>
+
+            <!-- Öğretmen Form -->
+            <div id="teacherForm" style="display:none;">
+                <h3 id="teacherFormTitle" style="margin-bottom:16px;color:var(--a-text);">Yeni Öğretmen Ekle</h3>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                    <div>
+                        <label style="font-size:.8rem;color:var(--a-muted2);display:block;margin-bottom:4px;">Ad Soyad</label>
+                        <input id="tName" type="text" class="login-input" style="margin:0;" placeholder="Ahmet Yılmaz">
+                    </div>
+                    <div>
+                        <label style="font-size:.8rem;color:var(--a-muted2);display:block;margin-bottom:4px;">Kullanıcı Adı</label>
+                        <input id="tUsername" type="text" class="login-input" style="margin:0;" placeholder="ahmetyilmaz">
+                    </div>
+                    <div>
+                        <label style="font-size:.8rem;color:var(--a-muted2);display:block;margin-bottom:4px;">Şifre</label>
+                        <input id="tPassword" type="password" class="login-input" style="margin:0;" placeholder="Şifre">
+                    </div>
+                    <div>
+                        <label style="font-size:.8rem;color:var(--a-muted2);display:block;margin-bottom:4px;">Rol</label>
+                        <select id="tRole" class="login-input" style="margin:0;cursor:pointer;">
+                <option value="teacher">👨‍🏫 Öğretmen</option>
+                            <option value="admin">👑 Admin</option>
+                        </select>
+                    </div>
+                </div>
+                <label style="display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--a-muted2);margin-bottom:16px;cursor:pointer;">
+                    <input id="tActive" type="checkbox" checked style="width:16px;height:16px;"> Hesap Aktif
+                </label>
+                <label style="font-size:.8rem;color:var(--a-muted2);display:block;margin-bottom:8px;">Erişim İzni (boş = tüm sınıflar)</label>
+                <div id="tClasses" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;max-height:150px;overflow-y:auto;padding:4px;"></div>
+                <label style="font-size:.8rem;color:var(--a-muted2);display:block;margin-bottom:8px;">Ders Erişimi (boş = tüm dersler)</label>
+                <div id="tSubjects" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;padding:4px;"></div>
+                <div style="display:flex;gap:8px;">
+                    <button id="saveTeacherBtn"   class="btn-action btn-action-pos" style="height:42px;">💾 Kaydet</button>
+                    <button id="cancelTeacherBtn" class="btn-action btn-action-neg" style="height:42px;">İptal</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Şifre Değiştirme Modalı ──────────────────────────────────────── -->
+    <div id="pwModal" class="modal">
+        <div class="modal-content" style="max-width:400px;">
+            <div class="modal-header">
+                <h2>🔒 Şifre Değiştir</h2>
+                <button id="closePwModal" class="btn-action btn-action-neg"
+                        style="width:auto;padding:0 20px;height:40px;border-radius:10px;">Kapat</button>
+            </div>
+            <label style="font-size:.8rem;color:var(--a-muted2);display:block;margin-bottom:4px;">Yeni Şifre</label>
+            <input id="newPwInput"  type="password" class="login-input" placeholder="En az 8 karakter">
+            <label style="font-size:.8rem;color:var(--a-muted2);display:block;margin-bottom:4px;">Şifre (Tekrar)</label>
+            <input id="newPw2Input" type="password" class="login-input" placeholder="Şifreyi tekrar girin">
+            <p id="pwError" style="color:var(--s-neg);font-size:.82rem;min-height:20px;margin-bottom:12px;"></p>
+            <button id="savePwBtn" class="btn-action btn-action-pos" style="height:42px;">✓ Şifreyi Güncelle</button>
+        </div>
+    </div>
+
+    <!-- ── Ders Yönetimi Modal (Admin Only) ────────────────────────────── -->
+    <div id="subjectManageModal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width:500px;">
+            <div class="modal-header">
+            <h2>⚙️ Ders Yönetimi</h2>
+                <button onclick="document.getElementById('subjectManageModal').style.display='none'" class="tbtn tbtn-ghost"> Kapat </button>
+            </div>
+            
+            <div style="background:var(--a-surface2); padding:16px; border-radius:var(--radius-md); border:1px solid var(--a-border2); margin-bottom:16px;">
+                <h3 style="font-size:.9rem; color:var(--a-muted); margin-bottom:12px;">Yeni Ders Ekle</h3>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="newSubjEmoji" class="login-input" placeholder="Örn: 🎨" style="margin-bottom:0; width:60px; text-align:center;">
+                    <input type="text" id="newSubjLabel" class="login-input" placeholder="Ders Adı (Örn: Müzik)" style="margin-bottom:0; flex:1;">
+                    <input type="color" id="newSubjColor" value="#EAB308" style="background:transparent; border:none; height:46px; width:46px; cursor:pointer; padding:0;">
+                </div>
+                <button onclick="addNewSubject()" class="btn-action btn-action-pos" style="margin-top:12px; height:42px;">Ekle</button>
+            </div>
+
+            <h3 style="font-size:.9rem; color:var(--a-muted); margin-bottom:8px;">Kayıtlı Dersler</h3>
+            <div id="subjectListContainer" style="display:flex; flex-direction:column; gap:8px;">
+                <!-- Dinamik liste burada oluşacak -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Dönem Yönetimi Modal (Admin Only) ────────────────────────────── -->
+    <div id="termManageModal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width:560px;">
+            <div class="modal-header">
+                <h2>📅 Dönem Yönetimi</h2>
+                <button onclick="document.getElementById('termManageModal').style.display='none'" class="tbtn tbtn-ghost">Kapat</button>
+            </div>
+
+            <!-- Aktif dönem adı düzenle -->
+            <div style="background:var(--a-surface2);padding:16px;border-radius:var(--radius-md);border:1px solid var(--a-border2);margin-bottom:16px;">
+                    <h3 style="font-size:.9rem;color:var(--a-muted);margin-bottom:8px;">✏️ Aktif Dönem Adını Güncelle</h3>
+                <p style="font-size:.78rem;color:var(--a-muted2);margin-bottom:10px;">Veli görünümünde sınıfın başlığında görünür.</p>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" id="termStringInput" class="login-input" placeholder="Örn: 2024-2025 Eğitim Öğretim Yılı 1. Dönem" style="margin-bottom:0;flex:1;">
+                    <button onclick="updateTermString()" class="btn-action btn-action-pos" style="height:46px;width:auto;padding:0 18px;white-space:nowrap;">Güncelle</button>
+                </div>
+            </div>
+
+            <!-- Yeni dönem başlat -->
+            <div style="background:rgba(245,158,11,.07);padding:16px;border-radius:var(--radius-md);border:1px solid rgba(245,158,11,.25);margin-bottom:16px;">
+                <h3 style="font-size:.9rem;color:#F59E0B;margin-bottom:8px;">🆕 Yeni Dönem Başlat</h3>
+                <p style="font-size:.78rem;color:var(--a-muted2);margin-bottom:10px;">Mevcut tüm sınıfların verileri arşivlenir ve temiz sayfa açılır.</p>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" id="newTermLabelInput" class="login-input" placeholder="Yeni dönem adı (Örn: 2024-2025 2. Dönem)" style="margin-bottom:0;flex:1;">
+                    <button onclick="createNewTerm()" class="btn-action" style="height:46px;width:auto;padding:0 18px;white-space:nowrap;background:linear-gradient(135deg,#D97706,#F59E0B);color:white;">Başlat</button>
+                </div>
+            </div>
+
+            <!-- Dönem listesi -->
+            <h3 style="font-size:.9rem;color:var(--a-muted);margin-bottom:8px;">📚 Dönem Arşivi</h3>
+            <div id="termListContainer" style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;padding:2px;"></div>
+        </div>
+    </div>
+
+
+    <!-- ── Board Mode Screen (Akıllı Tahta Bekleme Ekranı) ─────────────── -->
+    <div id="boardScreen">
+                <div class="board-logo">🏛️</div>
+        <p class="board-school">Büyükşehir Belediyesi Gazi Mustafa Kemal Ortaokulu</p>
+        <h1 class="board-title">ClassLog Pro</h1>
+        <div class="board-qr-wrap">
+            <img id="boardScreenQr" src="" alt="QR Kod Yükleniyor...">
+        </div>
+        <div class="board-instruction">
+            <strong>Öğretmen adımları:</strong><br>
+            1. Telefondan Admin Paneli'ne giriş yap<br>
+                    2. Üst menüden <strong>"📱→🖥️ Tahtayı Aç"</strong> butonuna bas<br>
+            3. Veya bu QR'ı telefon kameranla tara<br>
+        </div>
+        <div style="margin-top:16px;padding:14px 20px;border-radius:18px;background:rgba(15,23,42,.7);border:1px solid rgba(148,163,184,.22);display:flex;flex-direction:column;gap:6px;align-items:center;position:relative;z-index:1;">
+            <span style="font-size:.82rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.55);">Tahta Kodu</span>
+            <span id="boardCodeValue" style="font-size:2.2rem;font-weight:900;letter-spacing:.22em;color:#f8fafc;font-variant-numeric:tabular-nums;">------</span>
+            <span id="boardCodeCountdown" style="font-size:.8rem;color:#93c5fd;">30 sn icinde yenilenir</span>
+        </div>
+        <div class="board-status">
+            <span class="board-pulse-dot"></span>
+            <span id="boardStatusText">Öğretmen bekleniyor...</span>
+        </div>
+    </div>
+
+<script src="pwa.js?v=10"></script>
+<script src="data.js?v=25"></script>
+<script src="admin.js?v=31"></script>
+    <script>
+    // Kiosk modundakileri göster
+    if (new URLSearchParams(window.location.search).get('mode') === 'kiosk') {
+        const hint = document.getElementById('kioskLoginHint');
+        const sub  = document.getElementById('loginSubtitle');
+        if (hint) hint.style.display = 'block';
+        if (sub)  sub.textContent    = 'Kiosk Modu — Kullanıcı adı ve şifrenizle giriş yapın';
+    }
+    </script>
+</body>
+</html>
+

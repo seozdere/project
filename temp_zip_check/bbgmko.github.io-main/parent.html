@@ -1,0 +1,127 @@
+﻿<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>ClassLog Pro | Veli Bilgilendirme</title>
+    <link rel="manifest" href="manifest.json?v=2">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="shortcut icon" href="favicon.svg">
+    <meta name="theme-color" content="#1A2F4E">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ClassLog Veli">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="style.css?v=4">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.99.3"></script>
+    <style>
+        /* ── Geçersiz Token Ekranı ───────────────────────────────────────────── */
+        #invalidScreen {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: var(--p-bg, #0F172A);
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 16px;
+            text-align: center;
+            padding: 32px;
+            z-index: 999;
+        }
+        #invalidScreen h2 { color: #F87171; font-size: 1.4rem; }
+        #invalidScreen p  { color: #94A3B8; font-size: .95rem; max-width: 380px; line-height: 1.6; }
+        #invalidScreen .invalid-icon { font-size: 4rem; }
+    </style>
+</head>
+<body class="parent-page">
+
+    <!-- ── Geçersiz / Eksik Token Ekranı ───────────────────────────────── -->
+    <div id="invalidScreen">
+        <div class="invalid-icon">🔗</div>
+        <h2>Geçersiz Bağlantı</h2>
+        <p>Bu sayfa yalnızca okul tarafından paylaşılan<br>özel bağlantı ile açılabilir.<br><br>
+        Lütfen öğretmeninizden size iletilen linki kullanın.</p>
+    </div>
+
+    <!-- ── Yükleniyor ───────────────────────────────────────────────────── -->
+    <div id="loadingScreen" style="display:flex;position:fixed;inset:0;background:var(--p-bg,#0F172A);align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:998;">
+        <div style="font-size:3rem;">📚</div>
+        <p style="color:#94A3B8;font-size:.95rem;">Yükleniyor...</p>
+    </div>
+
+    <!-- ── Ana Dashboard ────────────────────────────────────────────────── -->
+    <div class="excel-container" id="mainDashboard" style="display:none;">
+
+        <header class="excel-header">
+            <div class="excel-header-inner">
+                <div class="school-brand">
+                    <div class="school-logo">🏛️</div>
+                    <div class="school-name-block">
+                        <h1>Büyükşehir Belediyesi Gazi Mustafa Kemal Ortaokulu</h1>
+                        <p id="termBranding" style="color:#6366F1;font-weight:700;font-size:0.9rem;margin-bottom:4px; letter-spacing:0.5px;"></p>
+                        <p id="classBranding">SINIF ÖDEV TAKİP ÇİZELGESİ</p>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <!-- Ders sekmeleri -->
+                    <div id="subjectTabsParent" class="subject-tabs-wrap"></div>
+                    <!-- Görünüm sekmeleri -->
+                    <div class="view-toggle-wrap">
+                        <button class="view-toggle-btn active" id="btnHomework" onclick="switchView('homework')">📚 Ödev</button>
+                        <button class="view-toggle-btn"        id="btnClass"    onclick="switchView('class')">⚡ Ders İçi</button>
+                        <button class="view-toggle-btn"        id="btnLeader"   onclick="toggleLeader()">🏆 Liderlik</button>
+                    </div>
+                </div>
+            </div>
+            <div class="legend-bar" id="mainLegend">
+                <div class="legend-item"><span class="dot pos"></span> Tamam</div>
+                <div class="legend-item"><span class="dot neg"></span> Eksik</div>
+                <div class="legend-item"><span class="dot half"></span> Yarım</div>
+                <div class="legend-item"><span class="dot neutral"></span> Kitap Yok</div>
+                <div class="legend-item"><span class="dot absent"></span> Gelmedi</div>
+            </div>
+            <div id="parentNoticeBar" style="display:none;margin-top:10px;padding:12px 14px;border-radius:14px;background:linear-gradient(135deg,rgba(249,115,22,.14),rgba(245,158,11,.10));border:1px solid rgba(251,146,60,.22);color:#fff7ed;font-size:.86rem;line-height:1.6;font-weight:600;"></div>
+        </header>
+
+        <!-- Ödev tablosu -->
+        <div class="excel-grid-wrapper" id="homeworkView">
+            <table id="excelTable"><thead></thead><tbody></tbody></table>
+        </div>
+
+        <!-- Ders içi tablosu -->
+        <div class="excel-grid-wrapper" id="classView" style="display:none;">
+            <table id="classTable"><thead></thead><tbody></tbody></table>
+        </div>
+
+        <!-- Liderlik paneli -->
+        <div id="leaderPanel" style="display:none;flex:1;overflow-y:auto;"></div>
+
+        <footer class="excel-footer">
+            <div id="statusInfo" class="status-info-panel">
+                <span style="opacity:.55;font-weight:400;">Detay için bir öğrenciye veya hücreye tıklayın...</span>
+            </div>
+            <div class="legend-bar excel-footer-legend">
+                <div class="legend-item"><span class="dot pos"></span> Tamam</div>
+                <div class="legend-item"><span class="dot neg"></span> Eksik</div>
+                <div class="legend-item"><span class="dot half"></span> Yarım</div>
+                <div class="legend-item"><span class="dot neutral"></span> Kitap Yok</div>
+                <div class="legend-item"><span class="dot absent"></span> Gelmedi</div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Veli Notu Popup -->
+    <div id="notePopup" class="note-popup" style="display:none;">
+        <button class="note-popup-close" onclick="document.getElementById('notePopup').style.display='none'">✕</button>
+        <div id="notePopupContent"></div>
+    </div>
+
+<script src="pwa.js?v=10"></script>
+<script src="data.js?v=25"></script>
+<script src="parent.js?v=23"></script>
+</body>
+</html>
+

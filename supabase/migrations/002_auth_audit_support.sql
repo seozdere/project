@@ -91,6 +91,6 @@ as $$
     values (p_actor_teacher_id, p_actor_username, p_action, p_target_type, p_target_id, coalesce(p_ok, true), coalesce(p_metadata, '{}'::jsonb))
 $$;
 
-grant execute on function public.cl_recent_failed_auth_count(text, text, integer) to anon;
-grant execute on function public.cl_record_auth_attempt(text, text, boolean, text) to anon;
-grant execute on function public.cl_audit_event(text, bigint, text, text, text, boolean, jsonb) to anon;
+revoke execute on function public.cl_recent_failed_auth_count(text, text, integer) from public, anon, authenticated;
+revoke execute on function public.cl_record_auth_attempt(text, text, boolean, text) from public, anon, authenticated;
+revoke execute on function public.cl_audit_event(text, bigint, text, text, text, boolean, jsonb) from public, anon, authenticated;

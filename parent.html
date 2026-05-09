@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
@@ -54,7 +54,6 @@
 
     <!-- ── Ana Dashboard ────────────────────────────────────────────────── -->
     <div class="excel-container" id="mainDashboard" style="display:none;">
-
         <header class="excel-header">
             <div class="excel-header-inner">
                 <div class="school-brand">
@@ -84,6 +83,9 @@
                 <div class="legend-item"><span class="dot absent"></span> Gelmedi</div>
             </div>
         </header>
+        
+        <!-- 📣 Veli Duyuru Barı -->
+        <div id="parentNoticeBar" class="soft-notice-bar"></div>
 
         <!-- Ödev tablosu -->
         <div class="excel-grid-wrapper" id="homeworkView">
@@ -116,6 +118,16 @@
     <div id="notePopup" class="note-popup" style="display:none;">
         <button class="note-popup-close" onclick="document.getElementById('notePopup').style.display='none'">✕</button>
         <div id="notePopupContent"></div>
+    </div>
+
+    <!-- ✨ Kritik Duyuru Pop-up -->
+    <div id="criticalPopup" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.85);backdrop-filter:blur(8px);z-index:1000;align-items:center;justify-content:center;padding:24px;">
+        <div style="background:#FFF7ED;border:2px solid #F97316;border-radius:28px;width:100%;max-width:500px;padding:32px;position:relative;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);animation:slideInDown .5s cubic-bezier(0.16,1,0.3,1);">
+            <div style="font-size:3rem;margin-bottom:16px;text-align:center;">✨</div>
+            <h2 style="color:#9A3412;text-align:center;margin-bottom:16px;font-size:1.4rem;font-weight:800;">Uyarı</h2>
+            <div id="criticalPopupContent" style="color:#431407;text-align:center;font-size:1.1rem;line-height:1.6;font-weight:600;margin-bottom:24px;"></div>
+            <button onclick="document.getElementById('criticalPopup').style.display='none'" style="width:100%;background:#F97316;color:#fff;border:none;padding:14px;border-radius:16px;font-size:1.05rem;font-weight:800;cursor:pointer;box-shadow:0 8px 20px rgba(249,115,22,0.3);transition:transform .2s;">Anladım.</button>
+        </div>
     </div>
 
     <script src="pwa.js?v=2" charset="utf-8"></script>

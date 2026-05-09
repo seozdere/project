@@ -1,0 +1,57 @@
+{
+  "name": "ClassLog Pro - BBGMKO Ödev Takip",
+  "short_name": "ClassLog",
+  "description": "Büyükşehir Belediyesi Gazi Mustafa Kemal Ortaokulu ödev takip sistemi",
+  "id": "./index.html",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#060A14",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Öğretmen Paneli",
+      "short_name": "Admin",
+      "description": "Öğretmen girişi",
+      "url": "./admin.html",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Veli Görünümü",
+      "short_name": "Veli",
+      "description": "Veli bilgilendirme ekranı",
+      "url": "./parent.html",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "categories": ["education", "productivity"],
+  "lang": "tr",
+  "dir": "ltr"
+}

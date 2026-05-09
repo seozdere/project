@@ -4,6 +4,7 @@ Apply these SQL files in order before deploying the updated frontend:
 
 1. `migrations/001_parent_link_sessions.sql`
 2. `migrations/002_auth_audit_support.sql`
+3. `migrations/003_parent_session_ttl_30.sql`
 
 The first migration adds the parent-link exchange layer:
 
@@ -18,7 +19,7 @@ The migration intentionally wraps the existing `cl_get_parent_link` and `cl_get_
 Production checks after applying:
 
 - Old `parent.html?id=...` links should be phased out and rotated.
-- A copied `link=` URL should produce only a 10 minute session.
+- A copied `link=` URL should produce only a 30 minute session.
 - Deactivating a row in `cl_parent_links` should immediately stop future exchanges.
 - Expired rows in `cl_parent_sessions` should no longer read data.
 - Teachers/admins can revoke active class links through `cl_revoke_parent_links_v2`.
@@ -28,3 +29,7 @@ server-side login throttling and audit logging. Because the current repo does no
 include the original `cl_authenticate` / teacher-management SQL definitions, those
 existing functions still need to call the new helpers where marked in your Supabase
 function definitions.
+
+The third migration updates the parent viewing session TTL from 10 minutes to 30
+minutes. It is only needed on Supabase projects where `001_parent_link_sessions.sql`
+was already applied with the old 10 minute default.
