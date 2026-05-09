@@ -1,5 +1,5 @@
 // ClassLog Pro — Service Worker
-const CACHE = 'classlog-v52';
+const CACHE = 'classlog-v54';
 const STATIC = [
   './',
   './index.html',
